@@ -38,7 +38,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+from config import DATA_DIR
+
 CSV_PATH = DATA_DIR / "placement_history.csv"
 MODEL_PATH = DATA_DIR / "readiness_model.joblib"
 SYNTHETIC_FLAG = DATA_DIR / "placement_history.SYNTHETIC"

@@ -671,7 +671,7 @@ function viewAuth() {
       '<div class="stack"><span class="eyebrow">Or open a demo account</span><div class="demo">' +
         '<button data-act="demo" data-role="student"><b>Student demo</b><small>' + DEMO.student + '</small></button>' +
         '<button data-act="demo" data-role="officer"><b>Placement officer demo</b><small>' + DEMO.officer + '</small></button></div>' +
-        '<p class="faint" style="font-size:.8rem">Demo password: <span class="mono">' + DEMO.pass + '</span>. The students, companies and roles that ship with the project are sample data.</p></div>' +
+        '<p class="faint" style="font-size:.8rem">Demo password: <span class="mono">' + DEMO.pass + '</span>. The students, companies and roles that ship with the project are sample data.' + (S.meta && S.meta.ephemeral ? ' This is a demo deployment: anything you change is temporary, and the site returns to the sample data when the server restarts.' : '') + '</p></div>' +
     '</section></div>';
 }
 /* Called after a successful login or registration. */
@@ -1143,7 +1143,7 @@ function armed(el) {
 async function onResumeFile(input) {
   const file = input.files && input.files[0], status = $('#resume-status'), area = $('#resume-text');
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { status.textContent = 'That file is larger than 5 MB. Choose a smaller one.'; return; }
+  if (file.size > 4 * 1024 * 1024) { status.textContent = 'That file is larger than 4 MB. Choose a smaller one.'; return; }
   status.textContent = 'Reading ' + file.name + '…';
   try {
     const form = new FormData();

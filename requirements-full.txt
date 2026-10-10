@@ -1,0 +1,4 @@
+# Full stack: the base requirements plus the pretrained Sentence Transformer model.
+# This pulls in PyTorch, which is a large download and too heavy for small or serverless hosts.
+-r requirements.txt
+sentence-transformers>=2.7

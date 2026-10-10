@@ -1,6 +1,7 @@
 """PlacePilot AI: AI-powered college placement management system (Flask + SQLite).
 
 Run:  python app.py      then open http://127.0.0.1:5000
+On Vercel the platform imports `app` from this file; see the README.
 """
 from __future__ import annotations
 
@@ -18,12 +19,13 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import analytics
+import config
 import database
 import readiness_model
 import seed
 from ai_engine import SKILLS, Engine, Semantic, eligibility, extract_skills, normalize_list, normalize_skill, split_list
 
-BASE_DIR = Path(__file__).resolve().parent
+WEB_DIR = config.BASE_DIR / "web"
 DEPTS = ["CSE", "IT", "AI&DS", "ECE", "EEE", "MECH"]
 STATUSES = ["Applied", "Shortlisted", "Interview", "Offered", "Rejected"]
 JOB_TYPES = ["Full-time", "Internship"]
@@ -32,18 +34,23 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _secret_key() -> str:
-    """Use PLACEPILOT_SECRET if set, otherwise keep one random key on disk so logins survive restarts."""
+    """Use PLACEPILOT_SECRET if set, otherwise keep one random key on disk so logins survive restarts.
+
+    On a host with temporary storage (config.EPHEMERAL) always set PLACEPILOT_SECRET: every copy
+    of the app would otherwise invent its own key and people would be signed out at random.
+    """
     if os.environ.get("PLACEPILOT_SECRET"):
         return os.environ["PLACEPILOT_SECRET"]
-    database.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    path = database.DATA_DIR / "secret.key"
+    if config.EPHEMERAL:
+        print("WARNING: PLACEPILOT_SECRET is not set. Logins will not survive restarts on this host.")
+    path = config.DATA_DIR / "secret.key"
     if not path.exists():
         path.write_text(secrets.token_hex(32))
     return path.read_text().strip()
 
 
-app = Flask(__name__, static_folder=str(BASE_DIR / "static"), static_url_path="/static")
-app.config.update(SECRET_KEY=_secret_key(), MAX_CONTENT_LENGTH=5 * 1024 * 1024,
+app = Flask(__name__, static_folder=None)
+app.config.update(SECRET_KEY=_secret_key(), MAX_CONTENT_LENGTH=4 * 1024 * 1024,
                   SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 app.json.sort_keys = False
 
@@ -76,7 +83,7 @@ def _api_error(err: ApiError):
 @app.errorhandler(HTTPException)
 def _http_error(err: HTTPException):
     if request.path.startswith("/api/"):
-        message = "That file is larger than 5 MB. Choose a smaller one." if err.code == 413 else err.description
+        message = "That file is larger than 4 MB. Choose a smaller one." if err.code == 413 else err.description
         return jsonify(error=message), err.code
     return err
 
@@ -173,7 +180,7 @@ def ranked(eng: Engine, matches: dict) -> list[dict]:
 
 def meta() -> dict:
     return {"skills": [[s[0], s[1]] for s in SKILLS], "semantic": semantic.info(), "readiness": readiness().meta,
-            "today": date.today().isoformat(), "depts": DEPTS}
+            "today": date.today().isoformat(), "depts": DEPTS, "ephemeral": config.EPHEMERAL}
 
 
 def preview() -> dict | None:
@@ -198,7 +205,7 @@ def preview() -> dict | None:
 # ---------------------------------------------------------------------------
 @app.get("/")
 def index():
-    response = send_from_directory(app.static_folder, "index.html")
+    response = send_from_directory(WEB_DIR, "index.html")
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -658,6 +665,6 @@ if __name__ == "__main__":
     m = readiness().meta
     print(f"Readiness model : {m['algorithm']}, {m['rows']} rows from {m['source']}" + (" (synthetic sample data)" if m["synthetic"] else "")
           + f", holdout accuracy {m['accuracy']}, AUC {m['auc']}")
-    print(f"Database        : {database.DB_PATH}")
+    print(f"Database        : {database.DB_PATH}" + ("  (temporary storage, resets on restart)" if config.EPHEMERAL else ""))
     print(f"Demo logins     : {seed.DEMO_STUDENT_EMAIL} / {seed.DEMO_OFFICER_EMAIL}   password: {seed.DEMO_PASSWORD}")
     app.run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5000")), debug=False)

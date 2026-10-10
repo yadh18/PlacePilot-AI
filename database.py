@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from pathlib import Path
 
 from werkzeug.security import generate_password_hash
 
 import seed
 from ai_engine import normalize_skill, split_list
+from config import DATA_DIR
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
 DB_PATH = DATA_DIR / "placepilot.db"
 
 SCHEMA = """

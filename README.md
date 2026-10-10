@@ -10,11 +10,14 @@ see placement analytics.
 ```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 python app.py
 ```
 
 Open http://127.0.0.1:5000.
+
+`requirements-full.txt` includes the Sentence Transformer model (and PyTorch, a large download).
+`requirements.txt` is the same without it; the app then uses the TF-IDF fallback.
 
 | Account | Email | Password |
 | --- | --- | --- |
@@ -38,7 +41,7 @@ To use another port: `PORT=8000 python app.py` (Windows: `set PORT=8000` first).
 | difflib | Fuzzy skill matching and spelling correction of typed skills |
 | pandas | Placement analytics and generated insights |
 | pypdf | Reading text out of uploaded PDF resumes |
-| HTML, CSS, JavaScript | Single-page front end in `static/index.html` (hand-written CSS, no build step) |
+| HTML, CSS, JavaScript | Single-page front end in `web/index.html` (hand-written CSS, no build step) |
 
 ## Project layout
 
@@ -50,7 +53,8 @@ readiness_model.py   scikit-learn readiness model: training, loading, prediction
 analytics.py         pandas analytics for the officer dashboard
 database.py          SQLite schema, sample-data seeding, queries
 seed.py              Sample companies, roles, students and applications (all fictional)
-static/index.html    Front end
+config.py            Chooses where the app stores its files (data/ or temporary storage)
+web/index.html       Front end
 data/                Created on first run: database, trained model, training CSV, session key
 ```
 
@@ -91,8 +95,8 @@ The score is that probability times 100.
   To use real records, replace `data/placement_history.csv` (the column format is documented at
   the top of `readiness_model.py`), delete `data/placement_history.SYNTHETIC`, and run
   `python readiness_model.py`.
-- **Semantic fallback.** If `sentence-transformers` is not installed, or the model cannot be
-  downloaded, the app uses scikit-learn TF-IDF instead and says so in the terminal, in the
+- **Semantic fallback.** If `sentence-transformers` is not installed (it is only in
+  `requirements-full.txt`), or the model cannot be downloaded, the app uses scikit-learn TF-IDF instead and says so in the terminal, in the
   "How the match score is calculated" panel and under AI insights. Set
   `PLACEPILOT_SEMANTIC=tfidf` to force the fallback, or `PLACEPILOT_MODEL=<name or path>` to use
   a different model.
@@ -103,6 +107,29 @@ The score is that probability times 100.
   "Reset sample data" button erases the database and restores them.
 - **Development server.** `python app.py` uses Flask's built-in server, which is fine for a demo
   or a lab. For real use put it behind a production WSGI server and HTTPS.
+
+## Deploy on Vercel (demo mode)
+
+Vercel runs the app as a serverless function, which changes two things:
+
+- **Data is temporary.** The project folder is read-only there, so the database lives in
+  temporary storage and the site returns to the sample data whenever Vercel restarts the
+  function. Sign-ups, applications and new postings made on the deployed site do not last, and
+  a newly registered account can be signed out when that happens. The sign-in screen says so.
+- **No Sentence Transformer model.** Vercel installs `requirements.txt`, which leaves it out, so
+  the deployed site uses the TF-IDF fallback.
+
+Steps:
+
+1. Push the project to GitHub.
+2. On vercel.com choose **Add New > Project**, import the repository and keep the **Flask** preset.
+3. Open **Environment Variables** and add `PLACEPILOT_SECRET` with a long random value
+   (`python3 -c "import secrets; print(secrets.token_hex(32))"` prints one). Without it, people
+   are signed out at random.
+4. Click **Deploy**.
+
+For a deployment that keeps its data, use a host with a persistent disk and point
+`PLACEPILOT_DATA_DIR` at it.
 
 ## API
 
