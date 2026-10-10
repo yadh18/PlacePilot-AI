@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlacePilot AI</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: flight-deck shell. A fixed glass rail on the left, instrument panels on a 12-column grid,
+   and one brass accent reserved for scores and primary actions. Semantic green/orange/red carry state. */
+:root{
+  color-scheme:dark;
+  --bg:#070e11; --bg-2:#0c171b;
+  --panel:rgba(255,255,255,.045); --panel-2:rgba(255,255,255,.08); --panel-solid:#101d22;
+  --line:rgba(222,238,234,.11); --line-2:rgba(222,238,234,.22);
+  --fg:#e9f0ee; --muted:#a0b3af; --faint:#6f8581;
+  --accent:#e2c48d; --accent-ink:#1b1408; --accent-soft:rgba(226,196,141,.14);
+  --signal:#62d1c4; --signal-soft:rgba(98,209,196,.14);
+  --good:#5fd39b; --good-soft:rgba(95,211,155,.14);
+  --warn:#f2a25c; --warn-soft:rgba(242,162,92,.15);
+  --crit:#f07373; --crit-soft:rgba(240,115,115,.15);
+  --glow-1:rgba(98,209,196,.15); --glow-2:rgba(226,196,141,.11);
+  --shadow:0 28px 70px -34px rgba(0,0,0,.85);
+  --font-display:'Instrument Serif','Iowan Old Style','Palatino Linotype',Georgia,serif;
+  --font-body:'Hanken Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --r:18px; --r-sm:11px;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    color-scheme:light;
+    --bg:#eef2f0; --bg-2:#e3eae7;
+    --panel:rgba(255,255,255,.62); --panel-2:rgba(255,255,255,.9); --panel-solid:#ffffff;
+    --line:rgba(16,42,40,.12); --line-2:rgba(16,42,40,.26);
+    --fg:#0f1f1e; --muted:#48605c; --faint:#768985;
+    --accent:#84601f; --accent-ink:#fff8ea; --accent-soft:rgba(132,96,31,.12);
+    --signal:#0b776f; --signal-soft:rgba(11,119,111,.11);
+    --good:#177f50; --good-soft:rgba(23,127,80,.12);
+    --warn:#ad5c14; --warn-soft:rgba(173,92,20,.12);
+    --crit:#b93a3a; --crit-soft:rgba(185,58,58,.11);
+    --glow-1:rgba(11,119,111,.13); --glow-2:rgba(132,96,31,.11);
+    --shadow:0 24px 60px -36px rgba(16,42,40,.4);
+  }
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#eef2f0; --bg-2:#e3eae7;
+  --panel:rgba(255,255,255,.62); --panel-2:rgba(255,255,255,.9); --panel-solid:#ffffff;
+  --line:rgba(16,42,40,.12); --line-2:rgba(16,42,40,.26);
+  --fg:#0f1f1e; --muted:#48605c; --faint:#768985;
+  --accent:#84601f; --accent-ink:#fff8ea; --accent-soft:rgba(132,96,31,.12);
+  --signal:#0b776f; --signal-soft:rgba(11,119,111,.11);
+  --good:#177f50; --good-soft:rgba(23,127,80,.12);
+  --warn:#ad5c14; --warn-soft:rgba(173,92,20,.12);
+  --crit:#b93a3a; --crit-soft:rgba(185,58,58,.11);
+  --glow-1:rgba(11,119,111,.13); --glow-2:rgba(132,96,31,.11);
+  --shadow:0 24px 60px -36px rgba(16,42,40,.4);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.55 var(--font-body);-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(900px 620px at 88% -8%,var(--glow-1),transparent 62%),
+  radial-gradient(720px 540px at -6% 38%,var(--glow-2),transparent 62%),
+  radial-gradient(820px 600px at 58% 112%,var(--glow-1),transparent 66%)}
+#app{position:relative;z-index:1}
+h1,h2,h3,h4,p{margin:0}
+h1,h2,h3{font-family:var(--font-display);font-weight:400;letter-spacing:-.01em;text-wrap:balance;line-height:1.08}
+h1{font-size:clamp(1.9rem,3.2vw,2.6rem)}
+h2{font-size:1.55rem}
+h3{font-size:1.25rem}
+a{color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+.eyebrow{font:500 .7rem/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.ic{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.glass{background:var(--panel);border:1px solid var(--line);-webkit-backdrop-filter:blur(22px) saturate(140%);backdrop-filter:blur(22px) saturate(140%);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.05)}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:252px minmax(0,1fr);min-height:100vh}
+.rail{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;height:100vh;height:100dvh;display:flex;flex-direction:column;gap:18px;padding:22px 16px;border-width:0 1px 0 0;border-radius:0;z-index:30;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--font-display);font-size:1.45rem;line-height:1;padding:4px 8px}
+.brand em{color:var(--accent);font-style:italic}
+.brand svg{width:30px;height:30px;flex:none}
+.rail-cap{padding:0 8px;font:500 .68rem/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.rail nav{display:flex;flex-direction:column;gap:3px}
+.rail nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:var(--r-sm);text-decoration:none;color:var(--muted);font-weight:500;border:1px solid transparent;transition:background .2s,color .2s,border-color .2s}
+.rail nav a:hover{color:var(--fg);background:var(--panel)}
+.rail nav a.on{color:var(--fg);background:var(--panel-2);border-color:var(--line)}
+.rail nav a.on .ic{color:var(--accent)}
+.rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:12px;padding-top:14px;border-top:1px solid var(--line)}
+.me{display:flex;gap:10px;align-items:center;min-width:0}
+.me div{min-width:0}
+.me strong,.me small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me small{color:var(--faint);font-size:.78rem}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--accent-soft);color:var(--accent);font:500 .8rem var(--font-mono);border:1px solid var(--line)}
+.rail-actions{display:flex;flex-wrap:wrap;gap:6px}
+.main{min-width:0;width:100%;max-width:1340px;margin-inline:auto;padding-inline:clamp(16px,3.2vw,40px);padding-block:22px 72px}
+.top{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.top-title{flex:1 1 320px;min-width:0}
+.top-title p{color:var(--muted);margin-top:6px;max-width:68ch}
+.icon-btn.menu-btn{display:none}
+.rail-scrim{display:none}
+
+/* ---------- primitives ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border-radius:999px;border:1px solid var(--line-2);background:var(--panel);cursor:pointer;font-weight:600;font-size:.9rem;line-height:1.1;text-decoration:none;white-space:nowrap;transition:transform .15s,background .2s,border-color .2s,opacity .2s}
+.btn:hover{background:var(--panel-2);border-color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{padding:7px 12px;font-size:.8rem}
+.btn.danger{background:var(--crit-soft);border-color:var(--crit);color:var(--crit)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.icon-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line-2);background:var(--panel);display:grid;place-items:center;cursor:pointer;flex:none}
+.icon-btn:hover{background:var(--panel-2)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font:500 .72rem/1.5 var(--font-mono);letter-spacing:.03em;white-space:nowrap;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.good{color:var(--good);background:var(--good-soft);border-color:transparent}
+.pill.warn{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+.pill.crit{color:var(--crit);background:var(--crit-soft);border-color:transparent}
+.pill.mid{color:var(--signal);background:var(--signal-soft);border-color:transparent}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font-size:.82rem;line-height:1.3}
+.chip.good{border-color:transparent;background:var(--good-soft);color:var(--good)}
+.chip.warn{border-color:transparent;background:var(--warn-soft);color:var(--warn)}
+.chip.crit{border-color:transparent;background:var(--crit-soft);color:var(--crit)}
+.chip small{font:400 .7rem var(--font-mono);opacity:.85}
+.chip button{all:unset;cursor:pointer;width:16px;height:16px;display:grid;place-items:center;border-radius:50%;font-size:.95rem;line-height:1;opacity:.7}
+.chip button:hover{opacity:1;background:var(--panel-2)}
+button.chip{cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+button.chip:hover{border-color:var(--line-2)}
+button.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px}
+.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+.card{border-radius:var(--r);padding:22px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-head p{color:var(--muted);font-size:.88rem;margin-top:4px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.spread{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.divide>*+*{border-top:1px solid var(--line);padding-top:12px}
+.empty{padding:26px;border:1px dashed var(--line-2);border-radius:var(--r-sm);text-align:center;color:var(--muted)}
+.note{padding:12px 14px;border-radius:var(--r-sm);background:var(--signal-soft);color:var(--fg);font-size:.88rem;border:1px solid var(--line)}
+.note.warn{background:var(--warn-soft)}
+
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label,.label{font:500 .7rem/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+input[type=text],input[type=email],input[type=password],input[type=number],input[type=search],input[type=date],select,textarea{width:100%;min-width:0;padding:10px 12px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--panel);color:var(--fg);transition:border-color .2s,background .2s}
+select option{background:var(--panel-solid);color:var(--fg)}
+textarea{resize:vertical;min-height:92px;line-height:1.5}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);background:var(--panel-2)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.form-grid .wide{grid-column:1/-1}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.checks label{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--line);border-radius:999px;font-size:.85rem;cursor:pointer;text-transform:none;letter-spacing:0;font-family:var(--font-body);color:var(--fg)}
+.checks input{accent-color:var(--accent)}
+.err{color:var(--crit);font-size:.85rem}
+
+.meter{height:7px;border-radius:99px;background:var(--line);overflow:hidden;min-width:60px}
+.meter i{display:block;height:100%;border-radius:inherit;background:var(--signal);transition:width .7s cubic-bezier(.2,.7,.2,1)}
+.meter i.good{background:var(--good)}.meter i.warn{background:var(--warn)}.meter i.crit{background:var(--crit)}.meter i.acc{background:var(--accent)}
+
+.ring{flex:none}
+.ring circle{fill:none;stroke-width:4}
+.ring .ring-bg{stroke:var(--line)}
+.ring .ring-fg{stroke:var(--signal);stroke-linecap:round;transition:stroke-dasharray .7s cubic-bezier(.2,.7,.2,1)}
+.ring.good .ring-fg{stroke:var(--good)}.ring.warn .ring-fg{stroke:var(--warn)}.ring.crit .ring-fg{stroke:var(--crit)}
+.ring text{fill:var(--fg);font:500 13px var(--font-mono)}
+
+.gauge{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
+.gauge svg{width:min(210px,100%);height:auto;overflow:visible}
+.gauge circle{fill:none;stroke-width:9;stroke-linecap:round}
+.gauge .g-bg{stroke:var(--line)}
+.gauge .g-fg{stroke:var(--accent);animation:sweep 1s cubic-bezier(.2,.7,.2,1) both}
+.gauge .g-fg.good{stroke:var(--good)}.gauge .g-fg.mid{stroke:var(--signal)}.gauge .g-fg.warn{stroke:var(--warn)}.gauge .g-fg.crit{stroke:var(--crit)}
+.gauge line{stroke:var(--line-2);stroke-width:1.2}
+.gauge .g-num{fill:var(--fg);font:400 44px var(--font-display)}
+.gauge .g-cap{fill:var(--faint);font:500 9px var(--font-mono);letter-spacing:.14em}
+.gauge strong{font-weight:600}
+@keyframes sweep{from{stroke-dasharray:var(--from) 400px}}
+
+.kv{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(60px,1.6fr) auto;gap:10px 12px;align-items:center;font-size:.88rem}
+.kv .v{font:500 .78rem var(--font-mono);color:var(--muted);text-align:right;white-space:nowrap}
+
+.list{display:flex;flex-direction:column}
+.list>*{display:flex;align-items:center;gap:14px;padding:13px 0;border-top:1px solid var(--line);min-width:0}
+.list>*:first-child{border-top:0;padding-top:0}
+.list>*:last-child{padding-bottom:0}
+.list .grow{flex:1;min-width:0}
+.list .grow strong{display:block;font-weight:600;overflow-wrap:anywhere}
+.list .grow small{color:var(--muted);font-size:.82rem}
+button.linkrow{all:unset;display:flex;align-items:center;gap:14px;padding:13px 0;border-top:1px solid var(--line);cursor:pointer;width:100%;box-sizing:border-box;min-width:0}
+button.linkrow:first-child{border-top:0;padding-top:0}
+button.linkrow:hover strong{color:var(--accent)}
+button.linkrow:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.scroll-x{overflow-x:auto;margin-inline:-6px;padding-inline:6px}
+table{width:100%;border-collapse:collapse;min-width:680px;font-size:.88rem}
+th{font:500 .68rem/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-align:left;padding:0 12px 11px 0;white-space:nowrap}
+td{padding:12px 12px 12px 0;border-top:1px solid var(--line);vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+td strong{font-weight:600}
+td small{display:block;color:var(--muted);font-size:.8rem}
+tr.me-row td{background:var(--accent-soft)}
+.cell-meter{display:flex;align-items:center;gap:10px;min-width:120px}
+.cell-meter .meter{flex:1}
+.cell-meter span{font:500 .8rem var(--font-mono);width:2.4ch;text-align:right}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+.toolbar .grow{flex:1 1 220px;min-width:0}
+.toolbar select{width:auto}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:.88rem;cursor:pointer;padding:9px 12px;border:1px solid var(--line-2);border-radius:999px;background:var(--panel)}
+.toggle input{accent-color:var(--accent)}
+
+/* job cards */
+.jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.job{border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0;transition:transform .3s cubic-bezier(.2,.7,.2,1),border-color .3s}
+.job:hover{transform:translateY(-3px);border-color:var(--line-2)}
+.job-top{display:flex;gap:14px;align-items:flex-start}
+.job-top .grow{flex:1;min-width:0}
+.job-top h3{overflow-wrap:anywhere}
+.job-meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:.84rem}
+.job-meta b{color:var(--fg);font-weight:600}
+.job-foot{margin-top:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+/* stat tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+.tile{border-radius:var(--r);padding:18px 20px;display:flex;flex-direction:column;gap:8px}
+.tile b{font:400 2.5rem/1 var(--font-display)}
+.tile small{color:var(--muted);font-size:.82rem}
+
+/* charts */
+.bars{display:flex;flex-direction:column;gap:12px}
+.bar-row{display:grid;grid-template-columns:minmax(90px,150px) minmax(0,1fr) auto;gap:12px;align-items:center;font-size:.86rem}
+.bar-row .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-row .val{font:500 .76rem var(--font-mono);color:var(--muted);white-space:nowrap;text-align:right;min-width:5.5ch}
+.pair{display:flex;flex-direction:column;gap:4px}
+.pair .meter{height:6px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.hist{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;height:170px;padding-top:22px}
+.hist div{position:relative;border-radius:8px 8px 3px 3px;background:var(--signal);min-height:3px;transition:height .8s cubic-bezier(.2,.7,.2,1)}
+.hist div.crit{background:var(--crit)}.hist div.warn{background:var(--warn)}.hist div.good{background:var(--good)}
+.hist div span{position:absolute;left:0;right:0;top:-20px;text-align:center;font:500 .78rem var(--font-mono);color:var(--fg)}
+.hist-x{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;text-align:center;font:500 .68rem var(--font-mono);color:var(--faint)}
+.insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.insight{padding:16px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+.insight b{font-weight:600}
+
+/* steps */
+.steps{display:flex;align-items:center;gap:0;flex-wrap:wrap;row-gap:8px}
+.step{display:flex;align-items:center;gap:8px;font:500 .72rem var(--font-mono);letter-spacing:.04em;color:var(--faint)}
+.step::before{content:"";width:11px;height:11px;border-radius:50%;border:1.5px solid var(--line-2);background:var(--bg-2)}
+.step.done{color:var(--fg)}.step.done::before{background:var(--good);border-color:var(--good)}
+.step.now::before{box-shadow:0 0 0 4px var(--good-soft)}
+.step.bad{color:var(--crit)}.step.bad::before{background:var(--crit);border-color:var(--crit)}
+.step+.step::after{content:"";order:-1;width:26px;height:1.5px;background:var(--line-2);margin-right:8px}
+.step+.step{margin-left:8px}
+
+/* simulator */
+.delta{font:500 .82rem var(--font-mono);padding:3px 9px;border-radius:999px;background:var(--panel);border:1px solid var(--line);white-space:nowrap}
+.delta.up{color:var(--good);background:var(--good-soft);border-color:transparent}
+.delta.down{color:var(--crit);background:var(--crit-soft);border-color:transparent}
+.sim-result{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.sim-arrow{font:400 2rem var(--font-display);color:var(--faint)}
+
+/* layers */
+#layer{position:fixed;inset:0;z-index:60;display:none}
+#layer.on{display:block}
+.scrim{position:absolute;inset:0;background:rgba(4,9,11,.62);animation:fade .25s both}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(560px,100%);padding:calc(22px + env(safe-area-inset-top,0px)) 24px 28px;overflow-y:auto;display:flex;flex-direction:column;gap:20px;border-width:0 0 0 1px;background:var(--panel-solid);animation:slide .4s cubic-bezier(.2,.7,.2,1) both}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(680px,calc(100% - 32px));max-height:calc(100% - 48px);overflow-y:auto;border-radius:var(--r);padding:24px;display:flex;flex-direction:column;gap:18px;background:var(--panel-solid);animation:pop .3s cubic-bezier(.2,.7,.2,1) both}
+.modal footer,.drawer footer{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+@keyframes fade{from{opacity:0}}
+@keyframes slide{from{transform:translateX(40px);opacity:0}}
+@keyframes pop{from{transform:translate(-50%,-46%);opacity:0}}
+#toasts{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:90;display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;max-width:calc(100% - 32px)}
+.toast{padding:11px 16px;border-radius:12px;background:var(--panel-solid);border:1px solid var(--line-2);box-shadow:var(--shadow);font-size:.9rem;animation:rise .35s cubic-bezier(.2,.7,.2,1) both}
+.toast.bad{border-color:var(--crit)}
+
+/* search */
+.search{position:relative;flex:0 1 320px;min-width:200px}
+.search input{padding-left:38px;border-radius:999px}
+.search .ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint)}
+.results{position:absolute;top:calc(100% + 8px);left:0;right:0;border-radius:var(--r-sm);padding:6px;z-index:40;background:var(--panel-solid);max-height:340px;overflow-y:auto}
+.results button{all:unset;display:flex;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:9px 11px;border-radius:8px;cursor:pointer;font-size:.88rem}
+.results button:hover,.results button:focus-visible{background:var(--panel-2)}
+.results small{color:var(--faint);font:500 .68rem var(--font-mono);text-transform:uppercase;letter-spacing:.08em}
+
+/* auth */
+.auth{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(24px,5vw,72px);align-items:center;max-width:1240px;margin-inline:auto;padding-inline:clamp(16px,4vw,48px);padding-block:40px}
+.auth-copy{display:flex;flex-direction:column;gap:22px;min-width:0}
+.auth-copy h1{font-size:clamp(2.5rem,5.4vw,4.4rem);line-height:.98}
+.auth-copy h1 em{color:var(--accent)}
+.auth-copy>p{color:var(--muted);font-size:1.05rem;max-width:56ch}
+.preview{border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:14px;max-width:560px}
+.preview-top{display:flex;gap:14px;align-items:center}
+.auth-panel{border-radius:24px;padding:28px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.tabs{display:flex;gap:4px;padding:4px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+.tabs button{all:unset;flex:1;text-align:center;padding:9px 10px;border-radius:999px;cursor:pointer;font-weight:600;font-size:.88rem;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.demo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.demo button{all:unset;cursor:pointer;padding:13px 14px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:3px;box-sizing:border-box;transition:border-color .2s,background .2s}
+.demo button:hover{border-color:var(--accent);background:var(--panel-2)}
+.demo button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.demo b{font-weight:600}.demo small{color:var(--faint);font:400 .72rem var(--font-mono);overflow-wrap:anywhere}
+
+details.how{border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;font-size:.88rem;color:var(--muted)}
+details.how summary{cursor:pointer;color:var(--fg);font-weight:600}
+details.how p{margin-top:8px}
+details.add{border:1px dashed var(--line-2);border-radius:var(--r-sm);padding:12px 14px}
+details.add summary{cursor:pointer;font-weight:600;font-size:.9rem}
+details.add form{margin-top:14px;display:flex;flex-direction:column;gap:14px}
+
+/* motion */
+@keyframes rise{from{opacity:0;transform:translateY(16px)}}
+.enter [data-r]{animation:rise .7s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i,0) * 70ms)}
+.enter [data-r].wait{animation:none;opacity:0;transform:translateY(22px)}
+.enter [data-r].seen{animation:none;opacity:1;transform:none;transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .enter [data-r].wait{opacity:1;transform:none}
+  html{scroll-behavior:auto}
+}
+
+@media (max-width:1080px){
+  .s3{grid-column:span 6}.s4,.s5,.s6,.s7,.s8{grid-column:span 12}
+}
+@media (max-width:880px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .rail{position:fixed;left:0;top:0;bottom:0;width:270px;height:auto;transform:translateX(-105%);transition:transform .35s cubic-bezier(.2,.7,.2,1);background:var(--panel-solid);padding-top:calc(22px + env(safe-area-inset-top,0px))}
+  .rail.open{transform:none}
+  .rail-scrim{display:block;position:fixed;z-index:25}
+  .icon-btn.menu-btn{display:grid}
+  .top{align-items:center}
+  .auth{grid-template-columns:minmax(0,1fr);padding-block:28px}
+  .s3{grid-column:span 12}
+  .jobs{grid-template-columns:minmax(0,1fr)}
+  .sim-result{grid-template-columns:1fr 1fr}.sim-arrow{display:none}
+  .bar-row{grid-template-columns:minmax(70px,110px) minmax(0,1fr) auto}
+}
+@media (max-width:460px){
+  .card{padding:18px}.demo{grid-template-columns:1fr}
+  .kv{grid-template-columns:minmax(0,1fr) 52px auto;gap:8px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="layer" aria-live="polite"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   Utilities
+   ========================================================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const pct = x => Math.round(x * 100);
+const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const isoPlus = days => { const d = today(); d.setDate(d.getDate() + days); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const fmtDate = iso => { const d = new Date(iso + 'T00:00:00'); return isNaN(d) ? '—' : d.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'}); };
+const daysLeft = iso => Math.round((new Date(iso + 'T00:00:00') - today()) / 864e5);
+const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+const band = v => v >= 75 ? 'good' : v >= 55 ? 'mid' : v >= 35 ? 'warn' : 'crit';
+const bandLabel = v => v >= 75 ? 'Strong match' : v >= 55 ? 'Good match' : v >= 35 ? 'Partial match' : 'Low match';
+
+const TKEY = 'placepilot.theme';
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable: keep working in memory */ } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
+};
+
+/* =========================================================
+   Server state
+   Every score is computed by the Flask back end (ai_engine.py,
+   readiness_model.py, analytics.py). The page loads one snapshot from
+   /api/state and reads it again after each change.
+   ========================================================= */
+const CAT = {lang:'Languages', web:'Web & mobile', data:'Data', ml:'AI & ML', cloud:'Cloud & DevOps', core:'CS core', tool:'Tools & practices', hw:'Hardware & design', soft:'Professional', other:'Other'};
+const HINT = {
+  lang:'Solve 40 practice problems in it, then rebuild one of your projects with it.',
+  web:'Ship one small deployed app that uses it and link it under Projects.',
+  data:'Analyse one public dataset end to end and publish the notebook.',
+  ml:'Train, evaluate and document one model on a real dataset.',
+  cloud:'Deploy an existing project with it and write down every step you took.',
+  core:'Revise the syllabus unit and practise interview questions on it.',
+  tool:'Use it in your next project and mention it in that project entry.',
+  hw:'Build a bench prototype and record the measured results.',
+  soft:'Practise through mock interviews and group discussions.',
+  other:'Add a project or certificate that shows you have used it.'
+};
+const DEPTS = {CSE:'Computer Science & Engineering', IT:'Information Technology', 'AI&DS':'Artificial Intelligence & Data Science', ECE:'Electronics & Communication', EEE:'Electrical & Electronics', MECH:'Mechanical Engineering'};
+const STATUSES = ['Applied','Shortlisted','Interview','Offered','Rejected'];
+const STATUS_CLASS = {Applied:'', Shortlisted:'mid', Interview:'warn', Offered:'good', Rejected:'crit'};
+const DEMO = {student: 'aarav@placepilot.demo', officer: 'officer@placepilot.demo', pass: 'demo1234'};
+
+const EMPTY_DB = {students: [], companies: [], jobs: [], applications: []};
+let S = {session: null, me: null, db: EMPTY_DB, matches: {}, readiness: {}, roadmap: [], demand: null, overview: null, preview: null, meta: null};
+let db = EMPTY_DB, session = null;
+const SKILL_CAT = new Map();
+let ALL_SKILL_NAMES = [];
+const catOf = s => SKILL_CAT.get(s) || 'other';
+
+async function api(method, url, payload) {
+  const opt = {method, headers: {Accept: 'application/json'}, credentials: 'same-origin'};
+  if (payload instanceof FormData) opt.body = payload;
+  else if (payload !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(payload); }
+  let res;
+  try { res = await fetch(url, opt); }
+  catch (e) { throw new Error('Cannot reach the PlacePilot server. Check that app.py is still running.'); }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* response had no JSON body */ }
+  if (!res.ok) { const err = new Error((data && data.error) || 'The server could not complete that request (' + res.status + ').'); err.status = res.status; throw err; }
+  return data;
+}
+async function reload() {
+  S = await api('GET', '/api/state');
+  db = S.db || EMPTY_DB;
+  session = S.session || null;
+  if (S.meta && !SKILL_CAT.size) {
+    S.meta.skills.forEach(([name, cat]) => SKILL_CAT.set(name, cat));
+    ALL_SKILL_NAMES = S.meta.skills.map(x => x[0]).sort((a, b) => a.localeCompare(b));
+  }
+}
+const company = id => db.companies.find(c => c.id === id) || {name: 'Unknown company', sector: '', location: ''};
+const jobById = id => db.jobs.find(j => j.id === id);
+const studentById = id => db.students.find(s => s.id === id);
+const isOpen = j => j.deadline >= ((S.meta && S.meta.today) || isoPlus(0));
+const openJobs = () => db.jobs.filter(isOpen);
+const appsOf = sid => db.applications.filter(a => a.studentId === sid);
+const appFor = (sid, jid) => db.applications.find(a => a.studentId === sid && a.jobId === jid);
+const isPlaced = sid => db.applications.some(a => a.studentId === sid && a.status === 'Offered');
+const me = () => S.me;
+
+/* Scores come from the server; these only look them up. */
+const W = {cov: 0.55, sem: 0.30, ac: 0.15};
+const withJob = (m, j) => { m.job = j; return m; };
+const noMatch = j => ({job: j, jobId: j.id, score: 0, cov: 0, sem: 0, ac: 0, rows: [], elig: {ok: false, checks: []}});
+function match(s, j) { const m = (S.matches[s.id] || {})[j.id]; return m ? withJob(m, j) : noMatch(j); }
+function rankedJobs(s) { return openJobs().map(j => match(s, j)).sort((a, b) => (b.elig.ok - a.elig.ok) || (b.score - a.score)); }
+const READY = [
+  ['market','Role alignment','Average of your three best match scores'],
+  ['acad','Academics','CGPA on the 10-point scale, less 10% per active backlog'],
+  ['skills','Skill depth','Ten or more listed skills reaches 100%'],
+  ['proj','Projects','Three projects reaches 100%'],
+  ['exp','Experience','Internships and work experience'],
+  ['cert','Certifications','Two certificates reaches 100%'],
+  ['resume','Resume','A resume on file']
+];
+const readiness = s => S.readiness[s.id] || {score: 0, parts: {}, label: 'Not scored', eligible: 0};
+const roadmap = () => S.roadmap || [];
+const demand = () => S.demand || {list: [], nJobs: 0, nStudents: 0};
+const simKey = add => add.slice().sort().join('|');
+async function loadSim() {
+  const s = me(), add = ui.sim.add.filter(k => !s.skills.includes(k));
+  if (!add.length) { ui.simRes = null; return; }
+  const r = await api('POST', '/api/simulate', {add});
+  ui.simRes = {key: simKey(add), matches: r.matches, readiness: r.readiness};
+}
+function completeness(s) {
+  const items = [
+    ['Academic details', Number(s.cgpa) > 0 && !!s.dept],
+    ['At least five skills', s.skills.length >= 5],
+    ['A project', s.projects.length > 0],
+    ['A certification', s.certs.length > 0],
+    ['Internship or experience', s.exp.length > 0],
+    ['Resume', !!s.resume]
+  ];
+  return {items, pct: Math.round(items.filter(i => i[1]).length / items.length * 100)};
+}
+
+/* =========================================================
+   UI state, routing, shared components
+   ========================================================= */
+const NAV = {
+  student: [['dashboard','Dashboard','dash'],['profile','My profile','user'],['jobs','Job matches','brief'],['roadmap','Skill roadmap','route'],['simulator','What-If Simulator','sliders'],['applications','Applications','list']],
+  officer: [['overview','Analytics','dash'],['students','Students','users'],['companies','Companies','building'],['roles','Job postings','brief'],['candidates','AI shortlisting','target'],['pipeline','Applications','list']]
+};
+const TITLES = {
+  dashboard:['Dashboard','Your readiness, best matches and the next skills worth learning.'],
+  profile:['My profile','Everything here feeds the matching engine. More detail gives better matches.'],
+  jobs:['Job matches','Every open role scored against your profile.'],
+  roadmap:['Skill roadmap','Missing skills ranked by how much they would raise your match scores.'],
+  simulator:['What-If Simulator','Pick skills you could learn and see how your scores would change.'],
+  applications:['Applications','Track every role you have applied to.'],
+  overview:['Placement analytics','Skill demand, student readiness and pipeline health across the batch.'],
+  students:['Students','Search, add and review student profiles.'],
+  companies:['Companies','Recruiters visiting this placement season.'],
+  roles:['Job postings','Create roles and set eligibility criteria and required skills.'],
+  candidates:['AI shortlisting','Students ranked by match score for a selected role.'],
+  pipeline:['Applications','Move applications through the hiring stages.']
+};
+const ICON = {
+  dash:'<path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 7h6V4h-6z"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  brief:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+  route:'<path d="M4 20V4M4 20h16M8 15l4-5 3 3 5-7"/>',
+  sliders:'<path d="M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  building:'<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M3 21h18M8 7h4M8 11h4M8 15h4"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .6 3.5 2.2 3.5 5.2"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>', plus:'<path d="M12 5v14M5 12h14"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
+  out:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>'
+};
+const ic = n => '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + '</svg>';
+const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14.5" fill="none" stroke="var(--line-2)" stroke-width="1.2"/><path d="M16 4.5 20 16l-4 3.4L12 16z" fill="var(--accent)"/><path d="M16 27.5 12 16l4 3.4L20 16z" fill="var(--signal)" opacity=".75"/><circle cx="16" cy="16" r="1.6" fill="var(--bg)"/></svg>';
+
+const ui = {route: '', menu: false, authTab: 'signin', authErr: '', g: {},
+  jobs: {q: '', type: '', elig: false, sort: 'match'}, sim: {jobId: null, add: []}, simRes: null,
+  stu: {q: '', dept: ''}, cand: {jobId: null, elig: true}, pipe: {status: ''}, search: '', form: null, resumeFound: null};
+
+function toast(msg, bad) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (bad ? ' bad' : '');
+  el.textContent = msg;
+  $('#toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 420); }, 3400);
+}
+function ring(v, size) {
+  const C = 2 * Math.PI * 20;
+  return '<svg class="ring ' + band(v) + '" viewBox="0 0 48 48" width="' + (size || 54) + '" height="' + (size || 54) + '" role="img" aria-label="Match score ' + v + ' out of 100">' +
+    '<circle class="ring-bg" cx="24" cy="24" r="20"/><circle class="ring-fg" cx="24" cy="24" r="20" transform="rotate(-90 24 24)" stroke-dasharray="' + (C * v / 100).toFixed(1) + ' ' + C.toFixed(1) + '"/>' +
+    '<text x="24" y="28.5" text-anchor="middle">' + v + '</text></svg>';
+}
+function gauge(key, v, caption, cls) {
+  const C = 2 * Math.PI * 54, L = C * 0.75, to = L * clamp(v / 100);
+  const from = ui.g[key] ?? 0; ui.g[key] = to;
+  let ticks = '';
+  for (let i = 0; i <= 10; i++) {
+    const a = (135 + i * 27) * Math.PI / 180, r1 = 63, r2 = i % 5 === 0 ? 68.5 : 66;
+    ticks += '<line x1="' + (70 + r1 * Math.cos(a)).toFixed(1) + '" y1="' + (70 + r1 * Math.sin(a)).toFixed(1) + '" x2="' + (70 + r2 * Math.cos(a)).toFixed(1) + '" y2="' + (70 + r2 * Math.sin(a)).toFixed(1) + '"/>';
+  }
+  return '<div class="gauge"><svg viewBox="0 0 140 132" role="img" aria-label="' + esc(caption) + ' ' + v + ' out of 100">' +
+    '<g transform="rotate(135 70 70)"><circle class="g-bg" cx="70" cy="70" r="54" stroke-dasharray="' + L.toFixed(1) + ' ' + C.toFixed(1) + '"/>' +
+    '<circle class="g-fg ' + (cls || band(v)) + '" cx="70" cy="70" r="54" style="--from:' + from.toFixed(1) + 'px;stroke-dasharray:' + to.toFixed(1) + 'px ' + (C + 40).toFixed(1) + 'px"/></g>' +
+    ticks + '<text class="g-num" x="70" y="82" text-anchor="middle">' + v + '</text><text class="g-cap" x="70" y="103" text-anchor="middle">OUT OF 100</text></svg>' +
+    '<span class="eyebrow">' + esc(caption) + '</span></div>';
+}
+const meter = (x, cls) => '<div class="meter"><i class="' + (cls || '') + '" style="width:' + pct(clamp(x)) + '%"></i></div>';
+const eligPill = e => e.ok ? '<span class="pill good">Eligible</span>' : '<span class="pill crit">Not eligible</span>';
+const statusPill = s => '<span class="pill ' + (STATUS_CLASS[s] || '') + '">' + esc(s) + '</span>';
+const deltaBadge = d => '<span class="delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : '') + '">' + (d > 0 ? '+' : '') + d + '</span>';
+function skillChips(rows) {
+  return rows.map(r => {
+    if (r.how === 'match') return '<span class="chip good">' + esc(r.skill) + '</span>';
+    if (r.how === 'missing') return '<span class="chip crit">' + esc(r.skill) + (r.must ? '' : ' <small>optional</small>') + '</span>';
+    return '<span class="chip warn">' + esc(r.skill) + ' <small>via ' + esc(r.via) + ' · ' + pct(r.c) + '%</small></span>';
+  }).join('');
+}
+function how() {
+  const sem = (S.meta && S.meta.semantic) || {};
+  return '<details class="how"><summary>How the match score is calculated</summary>' +
+    '<p><b>Skill coverage (55%)</b> compares the role\'s required skills with yours. Must-have skills carry full weight and optional skills 40%. An exact match earns full credit, a near-identical spelling earns its difflib similarity ratio, and a closely related skill (Django for Flask, say) earns partial credit.</p>' +
+    '<p><b>Semantic similarity (30%)</b> ' + (sem.kind === 'sbert'
+      ? 'is the cosine similarity between Sentence Transformer embeddings (' + esc(sem.model) + ') of the job description and your profile text: skills, projects, certificates, experience and resume.'
+      : 'is the TF-IDF cosine similarity between the job description and your profile text. The server is using this fallback because the Sentence Transformer model is not installed or could not be loaded.') + '</p>' +
+    '<p><b>Academic fit (15%)</b> reflects your CGPA against the cutoff, backlogs and department. Eligibility itself is a separate pass or fail check.</p></details>';
+}
+function howReady() {
+  const m = (S.meta && S.meta.readiness) || {};
+  return '<details class="how"><summary>How readiness is calculated</summary>' +
+    '<p>The score is the probability of placement predicted by a logistic regression model (scikit-learn) from the seven factors above, multiplied by 100.</p>' +
+    '<p>The model was trained on ' + (m.rows || 0) + ' records from ' + esc(m.source || 'the history file') + ', with ' + pct(m.accuracy || 0) + '% holdout accuracy and an AUC of ' + (m.auc || 0) + '.' +
+    (m.synthetic ? ' Those records are synthetic sample data generated by the project. Replace the file with real placement records and retrain before relying on the score.' : '') + '</p></details>';
+}
+
+/* ---------- routing ---------- */
+function defaultRoute() { return session ? NAV[session.role][0][0] : 'welcome'; }
+function parseRoute() {
+  const h = (location.hash || '').replace('#', '');
+  if (!session) return 'welcome';
+  return NAV[session.role].some(n => n[0] === h) ? h : defaultRoute();
+}
+function go(r) { if (location.hash === '#' + r) { ui.route = r; render(true); } else location.hash = r; }
+window.addEventListener('hashchange', () => { ui.route = parseRoute(); ui.menu = false; closeLayer(); render(true); window.scrollTo(0, 0); });
+
+let observer = null;
+function render(animate) {
+  const app = $('#app');
+  if (!session) { app.innerHTML = viewAuth(); }
+  else {
+    ui.route = parseRoute();
+    app.innerHTML = shell(VIEWS[ui.route]());
+  }
+  const root = session ? $('#view') : $('.auth');
+  if (animate && root) {
+    root.classList.add('enter');
+    const vh = window.innerHeight;
+    if (observer) observer.disconnect();
+    observer = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.remove('wait'); e.target.classList.add('seen'); observer.unobserve(e.target); }
+    }), {rootMargin: '0px 0px -8% 0px'}) : null;
+    $$('[data-r]', root).forEach((el, i) => {
+      if (observer && el.getBoundingClientRect().top > vh) { el.classList.add('wait'); observer.observe(el); }
+      else el.style.setProperty('--i', Math.min(i, 8));
+    });
+    setTimeout(() => $$('[data-r].wait', root).forEach(el => { el.classList.remove('wait'); el.classList.add('seen'); }), 4000);
+  }
+}
+function refresh(id) { const el = document.getElementById(id); if (el && REGIONS[id]) el.innerHTML = REGIONS[id](); }
+
+function shell(view) {
+  const u = me(), nav = NAV[session.role], [title, sub] = TITLES[ui.route];
+  const subline = session.role === 'student' ? u.dept + ' · Class of ' + u.gradYear : u.title;
+  return '<div class="shell">' +
+    '<aside class="rail glass' + (ui.menu ? ' open' : '') + '" id="rail">' +
+      '<a class="brand" href="#' + nav[0][0] + '">' + LOGO + '<span>PlacePilot <em>AI</em></span></a>' +
+      '<p class="rail-cap">' + (session.role === 'student' ? 'Student workspace' : 'Placement cell') + '</p>' +
+      '<nav aria-label="Main">' + nav.map(([r, l, i]) => '<a href="#' + r + '"' + (ui.route === r ? ' class="on" aria-current="page"' : '') + '>' + ic(i) + '<span>' + l + '</span></a>').join('') + '</nav>' +
+      '<div class="rail-foot"><div class="me"><span class="avatar">' + esc(initials(u.name)) + '</span><div><strong>' + esc(u.name) + '</strong><small>' + esc(subline) + '</small></div></div>' +
+      '<div class="rail-actions"><button class="btn sm" data-act="theme">' + ic('sun') + 'Theme</button><button class="btn sm" data-act="signout">' + ic('out') + 'Sign out</button>' +
+      (session.role === 'officer' ? '<button class="btn sm" data-act="reset" title="Erase the database and restore the sample students, companies and jobs">Reset sample data</button>' : '') + '</div></div>' +
+    '</aside>' +
+    '<div class="scrim rail-scrim" data-act="menu"' + (ui.menu ? '' : ' hidden') + '></div>' +
+    '<main class="main"><header class="top">' +
+      '<button class="icon-btn menu-btn" data-act="menu" aria-label="Open menu">' + ic('menu') + '</button>' +
+      '<div class="top-title"><h1>' + title + '</h1><p>' + sub + '</p></div>' +
+      (session.role === 'officer' ? '<div class="search">' + ic('search') + '<input type="search" id="global-search" placeholder="Search students, companies, roles" autocomplete="off" data-input="search" value="' + esc(ui.search) + '" aria-label="Search students, companies and roles"><div id="search-results">' + REGIONS['search-results']() + '</div></div>' : '') +
+    '</header><div id="view">' + view + '</div></main></div>';
+}
+
+/* =========================================================
+   Auth
+   ========================================================= */
+function viewAuth() {
+  const p = S.preview;
+  const preview = !p ? '' : '<div class="preview glass" data-r><span class="eyebrow">Live preview · sample student ' + esc(p.student) + '</span>' +
+    '<div class="preview-top">' + ring(p.score, 64) + '<div><h3>' + esc(p.title) + '</h3><p class="muted">' + esc(p.company) + ' · ' + esc(p.pay) + '</p></div></div>' +
+    '<div class="chips">' + skillChips(p.rows) + '</div>' +
+    (p.tip ? '<p class="muted">Learning <b style="color:var(--fg)">' + esc(p.tip.skill) + '</b> would move this match from ' + p.score + ' to ' + p.tip.to + '.</p>' : '') + '</div>';
+  const signin = ui.authTab === 'signin';
+  return '<div class="auth">' +
+    '<section class="auth-copy"><a class="brand" href="#welcome" data-r>' + LOGO + '<span>PlacePilot <em>AI</em></span></a>' +
+      '<h1 data-r>Know your match before the company <em>arrives</em>.</h1>' +
+      '<p data-r>PlacePilot AI scores your profile against every open role on campus, shows the skills you are missing, and lets you test what learning one more skill would change. Placement officers get ranked shortlists and batch-wide analytics.</p>' +
+      preview + '</section>' +
+    '<section class="auth-panel glass" data-r>' +
+      '<div class="tabs" role="tablist"><button role="tab" aria-selected="' + signin + '" data-act="auth-tab" data-tab="signin">Sign in</button><button role="tab" aria-selected="' + !signin + '" data-act="auth-tab" data-tab="signup">Create student account</button></div>' +
+      (signin ?
+        '<form class="stack" data-form="signin" novalidate>' +
+          '<div class="field"><label for="si-email">Email</label><input type="email" id="si-email" name="email" autocomplete="username" required></div>' +
+          '<div class="field"><label for="si-pass">Password</label><input type="password" id="si-pass" name="pass" autocomplete="current-password" required></div>' +
+          (ui.authErr ? '<p class="err" role="alert">' + esc(ui.authErr) + '</p>' : '') +
+          '<button class="btn primary">Sign in ' + ic('arrow') + '</button></form>'
+        :
+        '<form class="stack" data-form="signup" novalidate><div class="form-grid">' +
+          '<div class="field wide"><label for="su-name">Full name</label><input type="text" id="su-name" name="name" autocomplete="name" required></div>' +
+          '<div class="field wide"><label for="su-email">College email</label><input type="email" id="su-email" name="email" autocomplete="email" required></div>' +
+          '<div class="field"><label for="su-dept">Department</label><select id="su-dept" name="dept">' + Object.keys(DEPTS).map(d => '<option>' + esc(d) + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label for="su-cgpa">CGPA (out of 10)</label><input type="number" id="su-cgpa" name="cgpa" min="0" max="10" step="0.01" required></div>' +
+          '<div class="field wide"><label for="su-pass">Password (8+ characters)</label><input type="password" id="su-pass" name="pass" autocomplete="new-password" required></div></div>' +
+          (ui.authErr ? '<p class="err" role="alert">' + esc(ui.authErr) + '</p>' : '') +
+          '<button class="btn primary">Create account ' + ic('arrow') + '</button></form>') +
+      '<div class="stack"><span class="eyebrow">Or open a demo account</span><div class="demo">' +
+        '<button data-act="demo" data-role="student"><b>Student demo</b><small>' + DEMO.student + '</small></button>' +
+        '<button data-act="demo" data-role="officer"><b>Placement officer demo</b><small>' + DEMO.officer + '</small></button></div>' +
+        '<p class="faint" style="font-size:.8rem">Demo password: <span class="mono">' + DEMO.pass + '</span>. The students, companies and roles that ship with the project are sample data.</p></div>' +
+    '</section></div>';
+}
+/* Called after a successful login or registration. */
+async function enter(route) {
+  await reload();
+  ui.authErr = ''; ui.g = {}; ui.sim = {jobId: null, add: []}; ui.simRes = null; ui.resumeFound = null;
+  const r = route || defaultRoute();
+  if (location.hash.replace('#', '') === r) { ui.route = r; render(true); } else location.hash = r;
+}
+
+/* =========================================================
+   Student views
+   ========================================================= */
+function readinessRows(R) {
+  return '<div class="kv">' + READY.map(([k, label, tip]) => {
+    const x = R.parts[k] || 0;
+    return '<span title="' + esc(tip) + '">' + label + '</span>' + meter(x, x >= .7 ? 'good' : x >= .4 ? '' : 'warn') + '<span class="v">' + pct(x) + '%</span>';
+  }).join('') + '</div>';
+}
+function vDashboard() {
+  const s = me(), R = readiness(s), ms = rankedJobs(s).slice(0, 5), road = roadmap(s).slice(0, 4), apps = appsOf(s.id), pc = completeness(s);
+  const todo = pc.items.filter(i => !i[1]).map(i => i[0]);
+  return '<div class="grid">' +
+    '<section class="card glass s5" data-r><div class="card-head"><div><h2>Placement readiness</h2><p>' + (R.eligible ? 'You are eligible for ' + R.eligible + ' of ' + openJobs().length + ' open roles.' : 'You are not eligible for any open role yet.') + '</p></div><span class="pill ' + band(R.score) + '">' + R.label + '</span></div>' +
+      gauge('ready', R.score, 'Readiness score', 'acc') + readinessRows(R) + howReady() + '</section>' +
+    '<section class="card glass s7" data-r><div class="card-head"><div><h2>Your best matches</h2><p>Ranked by match score, eligible roles first.</p></div><a class="btn sm" href="#jobs">All ' + openJobs().length + ' roles</a></div>' +
+      (ms.length ? '<div class="list">' + ms.map(m => '<button class="linkrow" data-act="job-open" data-id="' + m.job.id + '">' + ring(m.score) +
+        '<span class="grow" style="flex:1;min-width:0"><strong style="display:block;font-weight:600">' + esc(m.job.title) + '</strong><small class="muted">' + esc(company(m.job.companyId).name) + ' · ' + esc(m.job.pay) + ' · ' + esc(m.job.location) + '</small></span>' + eligPill(m.elig) + '</button>').join('') + '</div>'
+        : '<div class="empty">No open roles right now. New postings appear here as soon as the placement cell adds them.</div>') + '</section>' +
+    '<section class="card glass s7" data-r><div class="card-head"><div><h2>Skills to learn next</h2><p>The gain is the average rise in match score across roles that ask for the skill.</p></div><a class="btn sm" href="#roadmap">Full roadmap</a></div>' +
+      (road.length ? '<div class="list">' + road.map(r => '<div><span class="grow"><strong>' + esc(r.skill) + '</strong><small>Asked for by ' + r.count + ' role' + (r.count === 1 ? '' : 's') + (r.must ? ', must-have in ' + r.must : '') + '</small></span>' +
+        '<span class="delta up">+' + r.avg.toFixed(1) + ' avg</span><button class="btn sm" data-act="road-sim" data-skill="' + esc(r.skill) + '">Simulate</button></div>').join('') + '</div>'
+        : '<div class="empty">' + (s.skills.length ? 'You already cover the skills in the roles you are eligible for.' : 'Add your skills in My profile to see what to learn next.') + '</div>') + '</section>' +
+    '<section class="card glass s5" data-r><div class="card-head"><div><h2>Profile and applications</h2></div><a class="btn sm" href="#profile">Edit profile</a></div>' +
+      '<div class="stack"><div class="spread"><span>Profile completeness</span><span class="mono">' + pc.pct + '%</span></div>' + meter(pc.pct / 100, 'acc') +
+      (todo.length ? '<p class="muted" style="font-size:.88rem">Still to add: ' + todo.map(esc).join(', ').toLowerCase() + '.</p>' : '<p class="muted" style="font-size:.88rem">Your profile is complete.</p>') + '</div>' +
+      '<div class="stack"><div class="spread"><span>Applications</span><a class="btn sm" href="#applications">Track ' + apps.length + '</a></div>' +
+      (apps.length ? '<div class="chips">' + STATUSES.filter(st => apps.some(a => a.status === st)).map(st => '<span class="pill ' + STATUS_CLASS[st] + '">' + apps.filter(a => a.status === st).length + ' ' + st + '</span>').join('') + '</div>'
+        : '<p class="muted" style="font-size:.88rem">You have not applied to any role yet.</p>') + '</div>' + how() + '</section>' +
+  '</div>';
+}
+
+function vProfile() {
+  const s = me(), byCat = {};
+  s.skills.forEach(k => (byCat[catOf(k)] = byCat[catOf(k)] || []).push(k));
+  const item = (kind, id, head, sub, body) => '<div><span class="grow"><strong>' + esc(head) + '</strong><small>' + esc(sub) + '</small>' + (body ? '<p class="muted" style="font-size:.86rem;margin-top:4px">' + esc(body) + '</p>' : '') + '</span><button class="btn sm" data-act="item-del" data-kind="' + kind + '" data-id="' + id + '">Remove</button></div>';
+  return '<div class="grid">' +
+    '<section class="card glass s7" data-r><div class="card-head"><div><h2>Personal and academic details</h2><p>CGPA, backlogs and department decide which roles you are eligible for.</p></div></div>' +
+      '<form data-form="profile" class="stack" novalidate><div class="form-grid">' +
+      '<div class="field"><label for="p-name">Full name</label><input type="text" id="p-name" name="name" value="' + esc(s.name) + '" required></div>' +
+      '<div class="field"><label for="p-email">Email</label><input type="email" id="p-email" value="' + esc(s.email) + '" disabled></div>' +
+      '<div class="field"><label for="p-phone">Phone</label><input type="text" id="p-phone" name="phone" value="' + esc(s.phone) + '" inputmode="tel"></div>' +
+      '<div class="field"><label for="p-dept">Department</label><select id="p-dept" name="dept">' + Object.keys(DEPTS).map(d => '<option' + (d === s.dept ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label for="p-year">Graduation year</label><input type="number" id="p-year" name="gradYear" value="' + esc(s.gradYear) + '" min="2020" max="2035"></div>' +
+      '<div class="field"><label for="p-cgpa">CGPA (out of 10)</label><input type="number" id="p-cgpa" name="cgpa" value="' + esc(s.cgpa) + '" min="0" max="10" step="0.01"></div>' +
+      '<div class="field"><label for="p-back">Active backlogs</label><input type="number" id="p-back" name="backlogs" value="' + esc(s.backlogs) + '" min="0" max="30"></div>' +
+      '<div class="field"><label for="p-10">Class 10 (%)</label><input type="number" id="p-10" name="tenth" value="' + esc(s.tenth) + '" min="0" max="100"></div>' +
+      '<div class="field"><label for="p-12">Class 12 (%)</label><input type="number" id="p-12" name="twelfth" value="' + esc(s.twelfth) + '" min="0" max="100"></div>' +
+      '<div class="field wide"><label for="p-head">About you</label><textarea id="p-head" name="headline" rows="2">' + esc(s.headline) + '</textarea></div></div>' +
+      '<div class="row"><button class="btn primary">Save details</button></div></form></section>' +
+
+    '<section class="card glass s5" data-r><div class="card-head"><div><h2>Skills</h2><p>Spelling is corrected automatically: "reactjs" and "Javascrpt" are saved as React and JavaScript.</p></div><span class="pill">' + s.skills.length + ' listed</span></div>' +
+      '<form data-form="skill" class="row" novalidate><input type="text" id="skill-input" name="skill" list="skill-list" placeholder="Add a skill, or several separated by commas" style="flex:1;min-width:160px" autocomplete="off" aria-label="Add a skill"><button class="btn">' + ic('plus') + 'Add</button></form>' +
+      '<datalist id="skill-list">' + ALL_SKILL_NAMES.filter(k => !s.skills.includes(k)).map(k => '<option value="' + esc(k) + '">').join('') + '</datalist>' +
+      (s.skills.length ? Object.keys(CAT).filter(c => byCat[c]).map(c => '<div class="stack" style="gap:7px"><span class="label">' + CAT[c] + '</span><div class="chips">' +
+        byCat[c].map(k => '<span class="chip">' + esc(k) + '<button data-act="skill-del" data-skill="' + esc(k) + '" aria-label="Remove ' + esc(k) + '">×</button></span>').join('') + '</div></div>').join('')
+        : '<div class="empty">No skills yet. Add the languages, tools and subjects you are confident in.</div>') + '</section>' +
+
+    '<section class="card glass s6" data-r><div class="card-head"><div><h2>Projects</h2></div><span class="pill">' + s.projects.length + '</span></div>' +
+      (s.projects.length ? '<div class="list">' + s.projects.map(p => item('projects', p.id, p.title, (p.tech || []).join(' · '), p.desc)).join('') + '</div>' : '<div class="empty">Add at least one project. Describe what you built and the tools you used.</div>') +
+      '<details class="add"><summary>Add a project</summary><form data-form="project" novalidate><div class="form-grid">' +
+      '<div class="field wide"><label for="pr-title">Title</label><input type="text" id="pr-title" name="title" required></div>' +
+      '<div class="field wide"><label for="pr-desc">What you built</label><textarea id="pr-desc" name="desc" rows="3"></textarea></div>' +
+      '<div class="field wide"><label for="pr-tech">Technologies (comma separated)</label><input type="text" id="pr-tech" name="tech"></div></div><div class="row"><button class="btn">Add project</button></div></form></details></section>' +
+
+    '<section class="card glass s6" data-r><div class="card-head"><div><h2>Certifications and experience</h2></div></div>' +
+      '<span class="label">Certifications</span>' +
+      (s.certs.length ? '<div class="list">' + s.certs.map(c => item('certs', c.id, c.name, c.issuer)).join('') + '</div>' : '<p class="muted" style="font-size:.88rem">None added.</p>') +
+      '<details class="add"><summary>Add a certification</summary><form data-form="cert" novalidate><div class="form-grid">' +
+      '<div class="field"><label for="ce-name">Certificate</label><input type="text" id="ce-name" name="name" required></div>' +
+      '<div class="field"><label for="ce-issuer">Issued by</label><input type="text" id="ce-issuer" name="issuer"></div></div><div class="row"><button class="btn">Add certification</button></div></form></details>' +
+      '<span class="label">Internships and experience</span>' +
+      (s.exp.length ? '<div class="list">' + s.exp.map(e => item('exp', e.id, e.role, e.org + ' · ' + e.months + ' month' + (Number(e.months) === 1 ? '' : 's'), e.desc)).join('') + '</div>' : '<p class="muted" style="font-size:.88rem">None added.</p>') +
+      '<details class="add"><summary>Add experience</summary><form data-form="exp" novalidate><div class="form-grid">' +
+      '<div class="field"><label for="ex-role">Role</label><input type="text" id="ex-role" name="role" required></div>' +
+      '<div class="field"><label for="ex-org">Organisation</label><input type="text" id="ex-org" name="org"></div>' +
+      '<div class="field"><label for="ex-months">Duration (months)</label><input type="number" id="ex-months" name="months" min="1" max="60" value="2"></div>' +
+      '<div class="field wide"><label for="ex-desc">What you did</label><textarea id="ex-desc" name="desc" rows="2"></textarea></div></div><div class="row"><button class="btn">Add experience</button></div></form></details></section>' +
+
+    '<section class="card glass s12" data-r><div class="card-head"><div><h2>Resume</h2><p>Upload a PDF or text file, or paste the text. The server reads it for skills and uses it in the semantic comparison with job descriptions.</p></div>' +
+      (s.resume ? '<span class="pill good" title="' + esc(s.resume.name) + '">On file · ' + esc(s.resume.name.length > 26 ? s.resume.name.slice(0, 24) + '…' : s.resume.name) + '</span>' : '<span class="pill warn">Not uploaded</span>') + '</div>' +
+      '<form data-form="resume" class="stack" novalidate>' +
+      '<div class="row"><input type="file" id="resume-file" accept=".pdf,.txt,.md,text/plain,application/pdf" data-change="resume-file" aria-label="Upload resume file" style="max-width:100%"><span class="muted" id="resume-status" style="font-size:.85rem"></span></div>' +
+      '<div class="field"><label for="resume-text">Resume text</label><textarea id="resume-text" name="text" rows="7" placeholder="Paste your resume text here">' + esc(s.resume ? s.resume.text : '') + '</textarea></div>' +
+      '<div class="row"><button class="btn primary">Save and analyse resume</button>' + (s.resume ? '<button type="button" class="btn" data-act="resume-clear">Remove resume</button>' : '') + '</div></form>' +
+      '<div id="resume-found">' + REGIONS['resume-found']() + '</div></section>' +
+  '</div>';
+}
+
+function jobCard(m, s) {
+  const j = m.job, c = company(j.companyId), app = appFor(s.id, j.id), miss = m.rows.filter(r => r.how === 'missing' && r.must), have = m.rows.filter(r => r.c >= 1).length, dl = daysLeft(j.deadline);
+  return '<article class="job glass" data-r><div class="job-top">' + ring(m.score, 58) + '<div class="grow"><span class="eyebrow">' + esc(c.name) + '</span><h3>' + esc(j.title) + '</h3></div></div>' +
+    '<div class="job-meta"><span><b>' + esc(j.pay) + '</b></span><span>' + esc(j.location) + '</span><span>' + esc(j.type) + '</span><span>' + (dl === 0 ? 'Closes today' : 'Closes in ' + dl + ' day' + (dl === 1 ? '' : 's')) + '</span></div>' +
+    '<div class="row">' + eligPill(m.elig) + '<span class="pill ' + band(m.score) + '">' + bandLabel(m.score) + '</span><span class="pill">' + have + ' of ' + m.rows.length + ' skills</span></div>' +
+    (miss.length ? '<div class="chips">' + miss.slice(0, 4).map(r => '<span class="chip crit">' + esc(r.skill) + '</span>').join('') + (miss.length > 4 ? '<span class="chip">+' + (miss.length - 4) + '</span>' : '') + '</div>' : '<p class="muted" style="font-size:.86rem">You cover every must-have skill.</p>') +
+    '<div class="job-foot"><button class="btn sm" data-act="job-open" data-id="' + j.id + '">View analysis</button>' +
+    (app ? statusPill(app.status) : '<button class="btn sm primary" data-act="job-apply" data-id="' + j.id + '"' + (m.elig.ok ? '' : ' disabled title="You do not meet the eligibility criteria"') + '>Apply</button>') + '</div></article>';
+}
+function vJobs() {
+  const f = ui.jobs;
+  return '<div class="toolbar" data-r><input class="grow" type="search" id="jobs-q" placeholder="Search by role, company, skill or city" value="' + esc(f.q) + '" data-input="jobs.q" aria-label="Search roles">' +
+    '<select id="jobs-type" data-change="jobs.type" aria-label="Role type"><option value="">All types</option>' + ['Full-time','Internship'].map(t => '<option' + (f.type === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
+    '<select id="jobs-sort" data-change="jobs.sort" aria-label="Sort by">' + [['match','Best match'],['pay','Highest package'],['deadline','Closing soonest']].map(([v, l]) => '<option value="' + v + '"' + (f.sort === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
+    '<label class="toggle"><input type="checkbox" id="jobs-elig" data-change="jobs.elig"' + (f.elig ? ' checked' : '') + '>Eligible only</label></div>' +
+    '<div id="jobs-list">' + REGIONS['jobs-list']() + '</div>';
+}
+function openJob(id) {
+  const s = me(), j = jobById(id); if (!j || session.role !== 'student') return;
+  const m = match(s, j), c = company(j.companyId), app = appFor(s.id, j.id);
+  const part = (label, x, w) => '<span>' + label + '</span>' + meter(x, x >= .7 ? 'good' : x >= .4 ? '' : 'warn') + '<span class="v">' + pct(x) + '% · ' + (x * w * 100).toFixed(1) + ' pts</span>';
+  openLayer('<div class="scrim" data-act="layer-close"></div><aside class="drawer glass" role="dialog" aria-label="' + esc(j.title) + '">' +
+    '<div class="spread"><span class="eyebrow">' + esc(c.name) + ' · ' + esc(c.sector) + '</span><button class="icon-btn" data-act="layer-close" aria-label="Close">' + ic('x') + '</button></div>' +
+    '<div><h2>' + esc(j.title) + '</h2><p class="muted" style="margin-top:6px">' + esc(j.pay) + ' · ' + esc(j.location) + ' · ' + esc(j.type) + ' · ' + j.openings + ' opening' + (j.openings === 1 ? '' : 's') + ' · apply by ' + fmtDate(j.deadline) + '</p></div>' +
+    '<div class="row" style="gap:18px">' + gauge('job|' + j.id, m.score, bandLabel(m.score)) + '<div class="stack" style="flex:1;min-width:220px"><div class="kv">' + part('Skill coverage', m.cov, W.cov) + part('Semantic similarity', m.sem, W.sem) + part('Academic fit', m.ac, W.ac) + '</div></div></div>' +
+    '<div class="stack"><div class="spread"><span class="label">Eligibility</span>' + eligPill(m.elig) + '</div>' + m.elig.checks.map(k => '<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="pill ' + (k.ok ? 'good' : 'crit') + '">' + (k.ok ? 'Pass' : 'Fail') + '</span><span style="font-size:.9rem">' + esc(k.label) + '</span></div>').join('') + '</div>' +
+    '<div class="stack"><span class="label">Must-have skills</span><div class="chips">' + skillChips(m.rows.filter(r => r.must)) + '</div>' +
+    (j.nice.length ? '<span class="label">Good to have</span><div class="chips">' + skillChips(m.rows.filter(r => !r.must)) + '</div>' : '') +
+    '<div class="legend"><span><i style="background:var(--good)"></i>You have it</span><span><i style="background:var(--warn)"></i>Partly covered</span><span><i style="background:var(--crit)"></i>Missing</span></div></div>' +
+    '<div class="stack"><span class="label">About the role</span><p style="max-width:65ch">' + esc(j.desc) + '</p></div>' + how() +
+    '<footer><button class="btn" data-act="job-sim" data-id="' + j.id + '">Simulate skills for this role</button>' +
+    (app ? statusPill(app.status) : '<button class="btn primary" data-act="job-apply" data-id="' + j.id + '"' + (m.elig.ok ? '' : ' disabled') + '>Apply now</button>') + '</footer></aside>');
+}
+
+function vRoadmap() {
+  const s = me(), road = roadmap(s), d = demand(), max = road.length ? road[0].total : 1;
+  return '<div class="grid">' +
+    '<section class="card glass s8" data-r><div class="card-head"><div><h2>What to learn, in order of impact</h2><p>Each skill was added to your profile one at a time and every role you are eligible for was re-scored. The bar shows the total points gained.</p></div></div>' +
+      (road.length ? '<div class="list">' + road.slice(0, 12).map((r, i) => '<div style="align-items:flex-start"><span class="avatar mono" style="background:var(--panel)">' + (i + 1) + '</span><span class="grow"><strong>' + esc(r.skill) + ' <span class="faint" style="font-weight:400;font-size:.82rem">' + CAT[catOf(r.skill)] + '</span></strong>' +
+        '<small>Asked for by ' + r.count + ' role' + (r.count === 1 ? '' : 's') + ': ' + esc(r.titles.slice(0, 3).join(', ')) + (r.titles.length > 3 ? ' and ' + (r.titles.length - 3) + ' more' : '') + '</small>' +
+        '<div style="margin:8px 0 6px">' + meter(r.total / max, 'acc') + '</div><small>' + HINT[catOf(r.skill)] + '</small></span>' +
+        '<span class="stack" style="align-items:flex-end;gap:8px"><span class="delta up">+' + r.avg.toFixed(1) + ' avg · +' + r.best + ' best</span><span class="row" style="justify-content:flex-end"><button class="btn sm" data-act="road-sim" data-skill="' + esc(r.skill) + '">Simulate</button><button class="btn sm" data-act="road-learn" data-skill="' + esc(r.skill) + '">I have learned this</button></span></span></div>').join('') + '</div>'
+        : '<div class="empty">' + (s.skills.length ? 'No gaps found in the roles you are eligible for.' : 'Add your skills in My profile and your roadmap will appear here.') + '</div>') + '</section>' +
+    '<section class="card glass s4" data-r><div class="card-head"><div><h2>Campus demand</h2><p>The most requested skills across ' + d.nJobs + ' open roles, and whether you have them.</p></div></div>' +
+      '<div class="list">' + d.list.slice(0, 14).map(e => '<div><span class="grow"><strong>' + esc(e.skill) + '</strong><small>' + e.jobs + ' role' + (e.jobs === 1 ? '' : 's') + ', must-have in ' + e.must + '</small></span>' + (s.skills.includes(e.skill) ? '<span class="pill good">Have</span>' : '<span class="pill crit">Gap</span>') + '</div>').join('') + '</div></section>' +
+  '</div>';
+}
+
+function vSimulator() {
+  const s = me(), ranked = rankedJobs(s);
+  if (!ranked.length) return '<div class="empty">There are no open roles to simulate against.</div>';
+  if (!ui.sim.jobId || !ranked.some(m => m.job.id === ui.sim.jobId)) ui.sim.jobId = ranked[0].job.id;
+  const add = ui.sim.add.filter(k => !s.skills.includes(k)); ui.sim.add = add;
+  const sim = add.length && ui.simRes && ui.simRes.key === simKey(add) ? ui.simRes : null;
+  const simMatch = x => sim && sim.matches[x.id] ? withJob(sim.matches[x.id], x) : match(s, x);
+  const j = jobById(ui.sim.jobId), before = match(s, j), after = simMatch(j);
+  const R0 = readiness(s), R1 = sim ? sim.readiness : R0;
+  const missing = before.rows.filter(r => r.c < 1).map(r => r.skill);
+  const others = demand().list.map(e => e.skill).filter(k => !s.skills.includes(k) && !missing.includes(k)).slice(0, 12);
+  const custom = add.filter(k => !missing.includes(k) && !others.includes(k));
+  const chip = k => '<button class="chip" data-act="sim-toggle" data-skill="' + esc(k) + '" aria-pressed="' + add.includes(k) + '">' + (add.includes(k) ? '✓ ' : '+ ') + esc(k) + '</button>';
+  const all = ranked.map(m => ({m, a: simMatch(m.job)})).map(x => ({...x, d: x.a.score - x.m.score})).sort((a, b) => b.d - a.d || b.a.score - a.a.score);
+  const comp = (label, a, b) => '<span>' + label + '</span>' + meter(b, b > a + .001 ? 'good' : '') + '<span class="v">' + pct(a) + '% → ' + pct(b) + '%</span>';
+  return '<div class="grid">' +
+    '<section class="card glass s5" data-r><div class="card-head"><div><h2>Choose a role and skills</h2><p>Nothing here changes your real profile until you choose to add the skills.</p></div></div>' +
+      '<div class="field"><label for="sim-job">Target role</label><select id="sim-job" data-change="sim.job">' + ranked.map(m => '<option value="' + m.job.id + '"' + (m.job.id === j.id ? ' selected' : '') + '>' + esc(m.job.title) + ' · ' + esc(company(m.job.companyId).name) + ' (' + m.score + ')</option>').join('') + '</select></div>' +
+      '<div class="stack"><span class="label">Missing or partly covered for this role</span>' + (missing.length ? '<div class="chips">' + missing.map(chip).join('') + '</div>' : '<p class="muted" style="font-size:.88rem">You already have every skill this role lists.</p>') + '</div>' +
+      '<div class="stack"><span class="label">Other skills in demand on campus</span><div class="chips">' + others.map(chip).join('') + custom.map(chip).join('') + '</div></div>' +
+      '<form data-form="sim-custom" class="row" novalidate><input type="text" id="sim-custom" name="skill" list="sim-list" placeholder="Try any other skill" style="flex:1;min-width:150px" autocomplete="off" aria-label="Try any other skill"><button class="btn">Add to simulation</button></form>' +
+      '<datalist id="sim-list">' + ALL_SKILL_NAMES.filter(k => !s.skills.includes(k)).map(k => '<option value="' + esc(k) + '">').join('') + '</datalist>' +
+      '<div class="row"><button class="btn primary" data-act="sim-commit"' + (add.length ? '' : ' disabled') + '>Add ' + (add.length || '') + ' skill' + (add.length === 1 ? '' : 's') + ' to my profile</button><button class="btn" data-act="sim-clear"' + (add.length ? '' : ' disabled') + '>Clear</button></div></section>' +
+    '<section class="card glass s7" data-r><div class="card-head"><div><h2>' + esc(j.title) + '</h2><p>' + esc(company(j.companyId).name) + ' · ' + (add.length ? 'with ' + add.map(esc).join(', ') : 'select skills on the left to simulate') + '</p></div>' + deltaBadge(after.score - before.score) + '</div>' +
+      '<div class="sim-result">' + gauge('sim-before', before.score, 'Current match') + '<span class="sim-arrow" aria-hidden="true">→</span>' + gauge('sim-after', after.score, 'Simulated match') + '</div>' +
+      '<div class="kv">' + comp('Skill coverage', before.cov, after.cov) + comp('Semantic similarity', before.sem, after.sem) + comp('Academic fit', before.ac, after.ac) + '</div>' +
+      '<div class="spread divide" style="border-top:1px solid var(--line);padding-top:14px"><span>Placement readiness <span class="mono muted">' + R0.score + ' → ' + R1.score + '</span></span>' + deltaBadge(R1.score - R0.score) + '</div>' +
+      '<p class="faint" style="font-size:.82rem">Scores are estimates of profile fit, not a prediction of selection. Academic fit does not change because skills do not alter CGPA or eligibility.</p></section>' +
+    '<section class="card glass s12" data-r><div class="card-head"><div><h2>Effect on every open role</h2><p>The same skills applied across all ' + all.length + ' roles, largest gain first.</p></div></div>' +
+      '<div class="scroll-x"><table><thead><tr><th>Role</th><th>Company</th><th>Eligibility</th><th class="num">Now</th><th class="num">Simulated</th><th class="num">Change</th></tr></thead><tbody>' +
+      all.map(x => '<tr' + (x.m.job.id === j.id ? ' class="me-row"' : '') + '><td><strong>' + esc(x.m.job.title) + '</strong></td><td>' + esc(company(x.m.job.companyId).name) + '</td><td>' + eligPill(x.m.elig) + '</td><td class="num">' + x.m.score + '</td><td class="num">' + x.a.score + '</td><td class="num">' + deltaBadge(x.d) + '</td></tr>').join('') +
+      '</tbody></table></div></section></div>';
+}
+
+function steps(status) {
+  const flow = ['Applied','Shortlisted','Interview','Offered'];
+  if (status === 'Rejected') return '<div class="steps"><span class="step done">Applied</span><span class="step bad">Not selected</span></div>';
+  const at = flow.indexOf(status);
+  return '<div class="steps">' + flow.map((f, i) => '<span class="step' + (i <= at ? ' done' : '') + (i === at ? ' now' : '') + '">' + f + '</span>').join('') + '</div>';
+}
+function vApplications() {
+  const s = me(), apps = appsOf(s.id).slice().sort((a, b) => b.date.localeCompare(a.date));
+  if (!apps.length) return '<div class="empty" data-r>You have not applied to any role yet. <a href="#jobs">Browse your job matches</a> and apply to the ones you are eligible for.</div>';
+  return '<div class="grid">' + apps.map(a => {
+    const j = jobById(a.jobId); if (!j) return '';
+    const m = match(s, j);
+    return '<section class="card glass s6" data-r><div class="job-top">' + ring(m.score) + '<div class="grow" style="flex:1;min-width:0"><span class="eyebrow">' + esc(company(j.companyId).name) + '</span><h3>' + esc(j.title) + '</h3></div>' + statusPill(a.status) + '</div>' +
+      steps(a.status) + '<div class="spread"><span class="muted" style="font-size:.86rem">Applied ' + fmtDate(a.date) + ' · updated ' + fmtDate(a.updated) + '</span><span class="row"><button class="btn sm" data-act="job-open" data-id="' + j.id + '">View analysis</button>' +
+      (a.status === 'Applied' ? '<button class="btn sm" data-act="app-withdraw" data-id="' + a.id + '">Withdraw</button>' : '') + '</span></div></section>';
+  }).join('') + '</div>';
+}
+
+/* =========================================================
+   Officer views
+   ========================================================= */
+function vOverview() {
+  const o = S.overview;
+  if (!o) return '<div class="empty">Analytics are not available yet.</div>';
+  const t = o.tiles, n = Math.max(1, o.nStudents), nJobs = Math.max(1, o.nJobs);
+  const cls = ['crit', 'warn', '', 'good', 'good'], maxBand = Math.max(1, ...o.bands.map(b => b.n));
+  const sem = (S.meta && S.meta.semantic) || {}, rm = (S.meta && S.meta.readiness) || {};
+  const tile = (label, v, sub) => '<div class="tile glass" data-r><span class="eyebrow">' + label + '</span><b>' + v + '</b><small>' + sub + '</small></div>';
+  return '<div class="stack" style="gap:18px"><div class="tiles">' +
+    tile('Students', t.students, t.depts + ' department' + (t.depts === 1 ? '' : 's')) +
+    tile('Companies', t.companies, t.openJobs + ' open role' + (t.openJobs === 1 ? '' : 's')) +
+    tile('Applications', t.applications, t.interview + ' at interview stage') +
+    tile('Placed', t.placedPct + '%', t.placed + ' of ' + t.students + ' students') +
+    tile('Average offer', t.avgCtc === null ? '—' : '₹' + t.avgCtc, t.avgCtc === null ? 'No offers yet' : 'LPA across ' + t.offers + ' offer' + (t.offers === 1 ? '' : 's')) + '</div>' +
+  '<div class="grid">' +
+    '<section class="card glass s7" data-r><div class="card-head"><div><h2>Skill demand against supply</h2><p>Share of open roles asking for each skill, beside the share of students who list it.</p></div><div class="legend"><span><i style="background:var(--accent)"></i>Roles asking</span><span><i style="background:var(--signal)"></i>Students with it</span></div></div>' +
+      (o.demand.length ? '<div class="bars">' + o.demand.map(e => '<div class="bar-row"><span class="lbl" title="' + esc(e.skill) + '">' + esc(e.skill) + '</span><div class="pair">' + meter(e.jobs / nJobs, 'acc') + meter(e.supply / n) + '</div><span class="val">' + pct(e.jobs / nJobs) + '% · ' + pct(e.supply / n) + '%</span></div>').join('') + '</div>'
+        : '<div class="empty">No open roles to measure demand from.</div>') + '</section>' +
+    '<section class="card glass s5" data-r><div class="card-head"><div><h2>Readiness distribution</h2><p>Number of students in each readiness band.</p></div><span class="pill">Mean ' + o.mean + '</span></div>' +
+      '<div><div class="hist">' + o.bands.map((b, i) => '<div class="' + cls[i] + '" style="height:' + Math.max(2, b.n / maxBand * 100) + '%"><span>' + b.n + '</span></div>').join('') + '</div><div class="hist-x" style="margin-top:8px">' + o.bands.map(b => '<span>' + b.a + '–' + b.b + '</span>').join('') + '</div></div></section>' +
+    '<section class="card glass s5" data-r><div class="card-head"><div><h2>Application funnel</h2><p>Applications that reached each stage. ' + o.rejected + (o.rejected === 1 ? ' was' : ' were') + ' not selected.</p></div></div>' +
+      '<div class="bars">' + o.funnel.map(f => '<div class="bar-row"><span class="lbl">' + f.st + '</span>' + meter(f.n / Math.max(1, o.funnel[0].n), f.st === 'Offered' ? 'good' : '') + '<span class="val">' + f.n + '</span></div>').join('') + '</div></section>' +
+    '<section class="card glass s7" data-r><div class="card-head"><div><h2>Placement by department</h2><p>Students with an offer out of each department\'s strength.</p></div></div>' +
+      '<div class="bars">' + o.depts.map(x => '<div class="bar-row"><span class="lbl">' + esc(x.dp) + '</span>' + meter(x.placed / Math.max(1, x.n), 'good') + '<span class="val">' + x.placed + ' / ' + x.n + '</span></div>').join('') + '</div></section>' +
+    '<section class="card glass s12" data-r><div class="card-head"><div><h2>AI insights</h2><p>Generated on the server from the current student, role and application data.</p></div></div>' +
+      (o.insights.length ? '<div class="insights">' + o.insights.map(([title, html]) => '<div class="insight"><span class="eyebrow">' + esc(title) + '</span><p>' + html + '</p></div>').join('') + '</div>' : '<div class="empty">Add students and job postings to generate insights.</div>') +
+      '<p class="faint" style="font-size:.82rem">Semantic engine: ' + esc(sem.model || 'not loaded') + (sem.kind === 'tfidf' ? ' (fallback, Sentence Transformer model not available)' : '') + '. Readiness model: ' + esc(rm.algorithm || 'not trained') + ', ' + (rm.rows || 0) + ' training rows' + (rm.synthetic ? ' of synthetic sample data' : '') + '.</p></section>' +
+  '</div></div>';
+}
+
+function vStudents() {
+  const f = ui.stu;
+  return '<div class="toolbar" data-r><input class="grow" type="search" id="stu-q" placeholder="Search by name, email or skill" value="' + esc(f.q) + '" data-input="stu.q" aria-label="Search students">' +
+    '<select id="stu-dept" data-change="stu.dept" aria-label="Department"><option value="">All departments</option>' + Object.keys(DEPTS).map(d => '<option' + (f.dept === d ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select>' +
+    '<button class="btn primary" data-act="stu-add">' + ic('plus') + 'Add student</button></div>' +
+    '<section class="card glass" data-r><div id="stu-table">' + REGIONS['stu-table']() + '</div></section>';
+}
+function openStudent(id) {
+  const s = studentById(id); if (!s) return;
+  const R = readiness(s), ms = rankedJobs(s).slice(0, 5), apps = appsOf(s.id);
+  openLayer('<div class="scrim" data-act="layer-close"></div><aside class="drawer glass" role="dialog" aria-label="' + esc(s.name) + '">' +
+    '<div class="spread"><span class="eyebrow">' + esc(DEPTS[s.dept] || s.dept) + ' · Class of ' + esc(s.gradYear) + '</span><button class="icon-btn" data-act="layer-close" aria-label="Close">' + ic('x') + '</button></div>' +
+    '<div><h2>' + esc(s.name) + '</h2><p class="muted" style="margin-top:6px">' + esc(s.email) + ' · CGPA ' + Number(s.cgpa).toFixed(2) + ' · ' + s.backlogs + ' backlog' + (s.backlogs === 1 ? '' : 's') + (isPlaced(s.id) ? ' · <span style="color:var(--good)">Placed</span>' : '') + '</p></div>' +
+    '<div class="row" style="gap:18px">' + gauge('stu|' + s.id, R.score, R.label, 'acc') + '<div style="flex:1;min-width:220px">' + readinessRows(R) + '</div></div>' +
+    '<div class="stack"><span class="label">Skills</span>' + (s.skills.length ? '<div class="chips">' + s.skills.map(k => '<span class="chip">' + esc(k) + '</span>').join('') + '</div>' : '<p class="muted">No skills listed.</p>') + '</div>' +
+    '<div class="stack"><span class="label">Best role matches</span><div class="list">' + ms.map(m => '<div>' + ring(m.score, 46) + '<span class="grow"><strong>' + esc(m.job.title) + '</strong><small>' + esc(company(m.job.companyId).name) + '</small></span>' + eligPill(m.elig) + '</div>').join('') + '</div></div>' +
+    '<div class="stack"><span class="label">Profile</span><p class="muted" style="font-size:.9rem">' + s.projects.length + ' project' + (s.projects.length === 1 ? '' : 's') + ', ' + s.certs.length + ' certification' + (s.certs.length === 1 ? '' : 's') + ', ' + s.exp.length + ' experience entr' + (s.exp.length === 1 ? 'y' : 'ies') + ', resume ' + (s.resume ? 'on file' : 'not uploaded') + '.</p>' +
+    (s.projects.length ? '<div class="list">' + s.projects.map(p => '<div><span class="grow"><strong>' + esc(p.title) + '</strong><small>' + esc(p.desc) + '</small></span></div>').join('') + '</div>' : '') + '</div>' +
+    '<div class="stack"><span class="label">Applications</span>' + (apps.length ? '<div class="list">' + apps.map(a => { const j = jobById(a.jobId); return j ? '<div><span class="grow"><strong>' + esc(j.title) + '</strong><small>' + esc(company(j.companyId).name) + '</small></span>' + statusPill(a.status) + '</div>' : ''; }).join('') + '</div>' : '<p class="muted">No applications yet.</p>') + '</div>' +
+    '<footer><button class="btn" data-act="stu-edit" data-id="' + s.id + '">Edit student</button></footer></aside>');
+}
+function studentForm(s) {
+  openForm({
+    title: s ? 'Edit student' : 'Add student', cta: s ? 'Save changes' : 'Add student',
+    fields: [
+      {name: 'name', label: 'Full name', required: true, value: s ? s.name : ''},
+      {name: 'email', label: 'Email', type: 'email', required: true, value: s ? s.email : ''},
+      {name: 'dept', label: 'Department', type: 'select', options: Object.keys(DEPTS), value: s ? s.dept : 'CSE'},
+      {name: 'gradYear', label: 'Graduation year', type: 'number', value: s ? s.gradYear : 2027, min: 2020, max: 2035},
+      {name: 'cgpa', label: 'CGPA (out of 10)', type: 'number', step: '0.01', min: 0, max: 10, required: true, value: s ? s.cgpa : ''},
+      {name: 'backlogs', label: 'Active backlogs', type: 'number', min: 0, max: 30, value: s ? s.backlogs : 0},
+      {name: 'skills', label: 'Skills (comma separated)', type: 'textarea', wide: true, value: s ? s.skills.join(', ') : ''}
+    ],
+    async onSubmit(v) {
+      if (s) { await api('PUT', '/api/students/' + s.id, v); await reload(); toast('Saved ' + v.name.trim() + '.'); return null; }
+      const r = await api('POST', '/api/students', v);
+      await reload();
+      return () => openLayer('<div class="scrim" data-act="layer-close"></div><div class="modal glass" role="dialog" aria-label="Temporary password">' +
+        '<div class="spread"><h2>Account created</h2><button class="icon-btn" data-act="layer-close" aria-label="Close">' + ic('x') + '</button></div>' +
+        '<p class="muted">' + esc(v.name.trim()) + ' can sign in with ' + esc(v.email.trim().toLowerCase()) + ' and this temporary password. It is shown only once, so pass it on now.</p>' +
+        '<input type="text" id="temp-pass" class="mono" readonly value="' + esc(r.tempPassword) + '" aria-label="Temporary password">' +
+        '<footer><button class="btn" data-act="copy-text" data-target="temp-pass">Copy password</button><button class="btn primary" data-act="layer-close">Done</button></footer></div>');
+    }
+  });
+}
+
+function vCompanies() {
+  return '<div class="toolbar" data-r><span class="grow muted">' + db.companies.length + ' companies this season</span><button class="btn primary" data-act="co-add">' + ic('plus') + 'Add company</button></div>' +
+    (db.companies.length ? '<div class="jobs">' + db.companies.map(c => {
+      const jobs = db.jobs.filter(j => j.companyId === c.id), apps = db.applications.filter(a => jobs.some(j => j.id === a.jobId));
+      return '<article class="job glass" data-r id="co-' + c.id + '"><div class="job-top"><span class="avatar" style="width:46px;height:46px;font-size:.95rem">' + esc(initials(c.name)) + '</span><div class="grow"><span class="eyebrow">' + esc(c.sector) + '</span><h3>' + esc(c.name) + '</h3></div></div>' +
+        '<p class="muted" style="font-size:.9rem">' + esc(c.about || 'No description added.') + '</p>' +
+        '<div class="job-meta"><span>' + esc(c.location) + '</span><span><b>' + jobs.filter(isOpen).length + '</b> open role' + (jobs.filter(isOpen).length === 1 ? '' : 's') + '</span><span><b>' + apps.length + '</b> application' + (apps.length === 1 ? '' : 's') + '</span><span><b>' + apps.filter(a => a.status === 'Offered').length + '</b> offer' + (apps.filter(a => a.status === 'Offered').length === 1 ? '' : 's') + '</span></div>' +
+        '<div class="job-foot"><button class="btn sm" data-act="co-edit" data-id="' + c.id + '">Edit</button><button class="btn sm" data-act="job-add" data-company="' + c.id + '">Post a role</button><button class="btn sm" data-act="co-del" data-id="' + c.id + '">Delete</button></div></article>';
+    }).join('') + '</div>' : '<div class="empty">No companies yet. Add the first recruiter to start posting roles.</div>');
+}
+function companyForm(c) {
+  openForm({
+    title: c ? 'Edit company' : 'Add company', cta: c ? 'Save changes' : 'Add company',
+    fields: [
+      {name: 'name', label: 'Company name', required: true, value: c ? c.name : ''},
+      {name: 'sector', label: 'Sector', value: c ? c.sector : ''},
+      {name: 'location', label: 'Head office city', value: c ? c.location : ''},
+      {name: 'about', label: 'About the company', type: 'textarea', wide: true, value: c ? c.about : ''}
+    ],
+    async onSubmit(v) {
+      if (c) await api('PUT', '/api/companies/' + c.id, v); else await api('POST', '/api/companies', v);
+      await reload();
+      toast((c ? 'Saved ' : 'Added ') + v.name.trim() + '.');
+      return null;
+    }
+  });
+}
+
+function vRoles() {
+  return '<div class="toolbar" data-r><span class="grow muted">' + openJobs().length + ' open of ' + db.jobs.length + ' postings</span><button class="btn primary" data-act="job-add"' + (db.companies.length ? '' : ' disabled title="Add a company first"') + '>' + ic('plus') + 'Post a role</button></div>' +
+    '<section class="card glass" data-r>' + (db.jobs.length ? '<div class="scroll-x"><table><thead><tr><th>Role</th><th>Package</th><th>Criteria</th><th class="num">Eligible</th><th class="num">Applied</th><th>Closes</th><th></th></tr></thead><tbody>' +
+      db.jobs.map(j => {
+        const el = db.students.filter(s => match(s, j).elig.ok).length, ap = db.applications.filter(a => a.jobId === j.id).length, open = isOpen(j);
+        return '<tr><td><strong>' + esc(j.title) + '</strong><small>' + esc(company(j.companyId).name) + ' · ' + esc(j.location) + ' · ' + esc(j.type) + '</small></td><td>' + esc(j.pay) + '</td>' +
+          '<td>CGPA ' + Number(j.minCgpa).toFixed(1) + '+<small>' + esc(j.depts.join(', ')) + ' · max ' + j.maxBacklogs + ' backlog' + (j.maxBacklogs === 1 ? '' : 's') + '</small></td>' +
+          '<td class="num">' + el + '</td><td class="num">' + ap + '</td><td>' + (open ? fmtDate(j.deadline) : '<span class="pill crit">Closed</span>') + '</td>' +
+          '<td><span class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" data-act="job-cands" data-id="' + j.id + '">Candidates</button><button class="btn sm" data-act="job-edit" data-id="' + j.id + '">Edit</button><button class="btn sm" data-act="job-del" data-id="' + j.id + '">Delete</button></span></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="empty">No job postings yet.</div>') + '</section>';
+}
+function jobForm(j, companyId) {
+  openForm({
+    title: j ? 'Edit job posting' : 'Post a role', cta: j ? 'Save changes' : 'Publish role',
+    fields: [
+      {name: 'companyId', label: 'Company', type: 'select', options: db.companies.map(c => [c.id, c.name]), value: j ? j.companyId : (companyId || (db.companies[0] || {}).id)},
+      {name: 'title', label: 'Role title', required: true, value: j ? j.title : ''},
+      {name: 'type', label: 'Type', type: 'select', options: ['Full-time','Internship'], value: j ? j.type : 'Full-time'},
+      {name: 'pay', label: 'Package as shown (e.g. ₹8 LPA)', required: true, value: j ? j.pay : ''},
+      {name: 'ctc', label: 'Annual value in LPA', type: 'number', step: '0.1', min: 0, value: j ? j.ctc : ''},
+      {name: 'location', label: 'Location', value: j ? j.location : ''},
+      {name: 'minCgpa', label: 'Minimum CGPA', type: 'number', step: '0.1', min: 0, max: 10, value: j ? j.minCgpa : 6.5},
+      {name: 'maxBacklogs', label: 'Backlogs allowed', type: 'number', min: 0, max: 20, value: j ? j.maxBacklogs : 0},
+      {name: 'openings', label: 'Openings', type: 'number', min: 1, value: j ? j.openings : 1},
+      {name: 'deadline', label: 'Apply by', type: 'date', value: j ? j.deadline : isoPlus(14)},
+      {name: 'depts', label: 'Eligible departments', type: 'checks', wide: true, options: Object.keys(DEPTS), value: j ? j.depts : ['CSE','IT']},
+      {name: 'desc', label: 'Job description', type: 'textarea', wide: true, rows: 5, required: true, value: j ? j.desc : '',
+        after: '<div class="row"><button type="button" class="btn sm" data-act="jd-extract">Extract skills from description</button><span class="muted" id="jd-note" style="font-size:.84rem"></span></div>'},
+      {name: 'must', label: 'Must-have skills (comma separated)', type: 'textarea', wide: true, rows: 2, required: true, value: j ? j.must.join(', ') : ''},
+      {name: 'nice', label: 'Good-to-have skills (comma separated)', type: 'textarea', wide: true, rows: 2, value: j ? j.nice.join(', ') : ''}
+    ],
+    async onSubmit(v) {
+      if (j) await api('PUT', '/api/jobs/' + j.id, v); else await api('POST', '/api/jobs', v);
+      await reload();
+      toast((j ? 'Saved ' : 'Published ') + v.title.trim() + '.');
+      return null;
+    }
+  });
+}
+
+function vCandidates() {
+  if (!db.jobs.length) return '<div class="empty">Post a role first, then come back to rank candidates for it.</div>';
+  if (!ui.cand.jobId || !jobById(ui.cand.jobId)) ui.cand.jobId = (openJobs()[0] || db.jobs[0]).id;
+  const j = jobById(ui.cand.jobId);
+  return '<div class="toolbar" data-r><select class="grow" id="cand-job" data-change="cand.job" aria-label="Role">' + db.jobs.map(x => '<option value="' + x.id + '"' + (x.id === j.id ? ' selected' : '') + '>' + esc(x.title) + ' · ' + esc(company(x.companyId).name) + '</option>').join('') + '</select>' +
+    '<label class="toggle"><input type="checkbox" id="cand-elig" data-change="cand.elig"' + (ui.cand.elig ? ' checked' : '') + '>Eligible only</label><button class="btn" data-act="cand-copy">Copy shortlist as CSV</button></div>' +
+    '<section class="card glass" data-r><div class="card-head"><div><h2>' + esc(j.title) + '</h2><p>' + esc(company(j.companyId).name) + ' · CGPA ' + Number(j.minCgpa).toFixed(1) + '+ · ' + esc(j.depts.join(', ')) + ' · ' + j.openings + ' opening' + (j.openings === 1 ? '' : 's') + '</p></div>' +
+    '<div class="chips">' + j.must.map(k => '<span class="chip">' + esc(k) + '</span>').join('') + '</div></div><div id="cand-table">' + REGIONS['cand-table']() + '</div></section>';
+}
+function candRows() {
+  const j = jobById(ui.cand.jobId); if (!j) return [];
+  return db.students.map(s => ({s, m: match(s, j)})).filter(x => !ui.cand.elig || x.m.elig.ok).sort((a, b) => (b.m.elig.ok - a.m.elig.ok) || (b.m.score - a.m.score));
+}
+function vPipeline() {
+  return '<div class="toolbar" data-r><select id="pipe-status" data-change="pipe.status" aria-label="Status"><option value="">All stages</option>' + STATUSES.map(s => '<option' + (ui.pipe.status === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>' +
+    '<span class="grow muted">' + db.applications.length + ' applications in total</span></div>' +
+    '<section class="card glass" data-r><div id="pipe-table">' + REGIONS['pipe-table']() + '</div></section>';
+}
+
+/* =========================================================
+   Partial regions (re-rendered without losing input focus)
+   ========================================================= */
+const REGIONS = {
+  'jobs-list'() {
+    const s = me(), f = ui.jobs, q = f.q.trim().toLowerCase();
+    let ms = rankedJobs(s).filter(m => {
+      const j = m.job;
+      if (f.type && j.type !== f.type) return false;
+      if (f.elig && !m.elig.ok) return false;
+      return !q || [j.title, company(j.companyId).name, j.location, ...j.must, ...j.nice].join(' ').toLowerCase().includes(q);
+    });
+    if (f.sort === 'pay') ms.sort((a, b) => b.job.ctc - a.job.ctc);
+    else if (f.sort === 'deadline') ms.sort((a, b) => a.job.deadline.localeCompare(b.job.deadline));
+    else if (f.sort === 'match') ms.sort((a, b) => b.score - a.score);
+    return ms.length ? '<div class="jobs">' + ms.map(m => jobCard(m, s)).join('') + '</div>' : '<div class="empty">No roles match these filters. Clear the search or turn off "Eligible only".</div>';
+  },
+  'resume-found'() {
+    const s = me(), f = ui.resumeFound;
+    if (!f || !s) return '';
+    const fresh = f.filter(k => !s.skills.includes(k));
+    if (!f.length) return '<div class="note warn" style="margin-top:14px">No known skills were detected in the resume text. Check that the text is readable, or add skills manually.</div>';
+    return '<div class="note stack" style="margin-top:14px"><span>Detected ' + f.length + ' skill' + (f.length === 1 ? '' : 's') + ' in your resume' + (fresh.length ? ', ' + fresh.length + ' not yet in your profile:' : '. All of them are already in your profile.') + '</span>' +
+      (fresh.length ? '<div class="chips">' + fresh.map(k => '<span class="chip">' + esc(k) + '</span>').join('') + '</div><div class="row"><button type="button" class="btn sm primary" data-act="resume-addall">Add all ' + fresh.length + ' to my skills</button></div>' : '') + '</div>';
+  },
+  'stu-table'() {
+    const f = ui.stu, q = f.q.trim().toLowerCase();
+    const rows = db.students.filter(s => (!f.dept || s.dept === f.dept) && (!q || [s.name, s.email, ...s.skills].join(' ').toLowerCase().includes(q)));
+    if (!rows.length) return '<div class="empty">No students match this search.</div>';
+    return '<div class="scroll-x"><table><thead><tr><th>Student</th><th>Dept</th><th class="num">CGPA</th><th class="num">Backlogs</th><th class="num">Skills</th><th>Readiness</th><th>Status</th><th></th></tr></thead><tbody>' +
+      rows.map(s => { const R = readiness(s), ap = appsOf(s.id).length;
+        return '<tr><td><strong>' + esc(s.name) + '</strong><small>' + esc(s.email) + '</small></td><td>' + esc(s.dept) + '</td><td class="num">' + Number(s.cgpa).toFixed(2) + '</td><td class="num">' + s.backlogs + '</td><td class="num">' + s.skills.length + '</td>' +
+          '<td><div class="cell-meter">' + meter(R.score / 100, R.score >= 65 ? 'good' : R.score >= 45 ? '' : 'warn') + '<span>' + R.score + '</span></div></td>' +
+          '<td>' + (isPlaced(s.id) ? '<span class="pill good">Placed</span>' : ap ? '<span class="pill mid">' + ap + ' applied</span>' : '<span class="pill">Not applied</span>') + '</td>' +
+          '<td><span class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" data-act="stu-view" data-id="' + s.id + '">View</button><button class="btn sm" data-act="stu-edit" data-id="' + s.id + '">Edit</button><button class="btn sm" data-act="stu-del" data-id="' + s.id + '">Delete</button></span></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  },
+  'cand-table'() {
+    const rows = candRows(), j = jobById(ui.cand.jobId);
+    if (!rows.length) return '<div class="empty">No ' + (ui.cand.elig ? 'eligible ' : '') + 'students for this role. Turn off "Eligible only" to see everyone.</div>';
+    return '<div class="scroll-x"><table><thead><tr><th class="num">#</th><th>Student</th><th class="num">CGPA</th><th>Match</th><th>Skills</th><th>Missing must-haves</th><th>Status</th><th></th></tr></thead><tbody>' +
+      rows.map((x, i) => { const a = appFor(x.s.id, j.id), miss = x.m.rows.filter(r => r.must && r.how === 'missing'), have = x.m.rows.filter(r => r.c >= 1).length;
+        return '<tr><td class="num">' + (i + 1) + '</td><td><strong>' + esc(x.s.name) + '</strong><small>' + esc(x.s.dept) + (x.m.elig.ok ? '' : ' · not eligible') + '</small></td><td class="num">' + Number(x.s.cgpa).toFixed(2) + '</td>' +
+          '<td><div class="cell-meter">' + meter(x.m.score / 100, band(x.m.score) === 'mid' ? '' : band(x.m.score)) + '<span>' + x.m.score + '</span></div></td><td class="mono">' + have + ' / ' + x.m.rows.length + '</td>' +
+          '<td>' + (miss.length ? '<div class="chips">' + miss.slice(0, 3).map(r => '<span class="chip crit">' + esc(r.skill) + '</span>').join('') + (miss.length > 3 ? '<span class="chip">+' + (miss.length - 3) + '</span>' : '') + '</div>' : '<span class="muted">None</span>') + '</td>' +
+          '<td>' + (a ? statusPill(a.status) : '<span class="pill">Not applied</span>') + '</td>' +
+          '<td><span class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" data-act="stu-view" data-id="' + x.s.id + '">View</button>' +
+          (a && a.status !== 'Applied' ? '' : '<button class="btn sm primary" data-act="cand-shortlist" data-id="' + x.s.id + '"' + (x.m.elig.ok ? '' : ' disabled title="Student does not meet the eligibility criteria"') + '>Shortlist</button>') + '</span></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  },
+  'pipe-table'() {
+    const rows = db.applications.filter(a => !ui.pipe.status || a.status === ui.pipe.status).slice().sort((a, b) => b.updated.localeCompare(a.updated));
+    if (!rows.length) return '<div class="empty">No applications at this stage.</div>';
+    return '<div class="scroll-x"><table><thead><tr><th>Student</th><th>Role</th><th>Match</th><th>Applied</th><th>Stage</th><th>Move to</th></tr></thead><tbody>' +
+      rows.map(a => { const s = studentById(a.studentId), j = jobById(a.jobId); if (!s || !j) return ''; const m = match(s, j);
+        return '<tr><td><strong>' + esc(s.name) + '</strong><small>' + esc(s.dept) + ' · CGPA ' + Number(s.cgpa).toFixed(2) + '</small></td><td><strong>' + esc(j.title) + '</strong><small>' + esc(company(j.companyId).name) + '</small></td>' +
+          '<td><div class="cell-meter">' + meter(m.score / 100, band(m.score) === 'mid' ? '' : band(m.score)) + '<span>' + m.score + '</span></div></td><td>' + fmtDate(a.date) + '</td><td>' + statusPill(a.status) + '</td>' +
+          '<td><select id="st-' + a.id + '" data-change="app.status" data-id="' + a.id + '" aria-label="Change stage for ' + esc(s.name) + '" style="width:auto">' + STATUSES.map(st => '<option' + (st === a.status ? ' selected' : '') + '>' + st + '</option>').join('') + '</select></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  },
+  'search-results'() {
+    const q = ui.search.trim().toLowerCase();
+    if (q.length < 2) return '';
+    const hits = [];
+    db.students.filter(s => (s.name + ' ' + s.email).toLowerCase().includes(q)).slice(0, 5).forEach(s => hits.push(['Student', s.name, 'stu-view', s.id]));
+    db.companies.filter(c => (c.name + ' ' + c.sector).toLowerCase().includes(q)).slice(0, 4).forEach(c => hits.push(['Company', c.name, 'co-goto', c.id]));
+    db.jobs.filter(j => j.title.toLowerCase().includes(q)).slice(0, 4).forEach(j => hits.push(['Role', j.title + ' · ' + company(j.companyId).name, 'job-cands', j.id]));
+    return '<div class="results glass">' + (hits.length ? hits.map(([t, l, act, id]) => '<button data-act="' + act + '" data-id="' + id + '"><span>' + esc(l) + '</span><small>' + t + '</small></button>').join('') : '<p class="muted" style="padding:9px 11px;font-size:.88rem">No students, companies or roles match.</p>') + '</div>';
+  }
+};
+const VIEWS = {dashboard: vDashboard, profile: vProfile, jobs: vJobs, roadmap: vRoadmap, simulator: vSimulator, applications: vApplications,
+  overview: vOverview, students: vStudents, companies: vCompanies, roles: vRoles, candidates: vCandidates, pipeline: vPipeline};
+
+/* =========================================================
+   Layers: drawer + modal form
+   ========================================================= */
+function openLayer(html) { const l = $('#layer'); l.innerHTML = html; l.classList.add('on'); const f = $('.drawer .icon-btn, .modal input, .modal select, .modal textarea', l); if (f) f.focus({preventScroll: true}); }
+function closeLayer() { const l = $('#layer'); l.classList.remove('on'); l.innerHTML = ''; ui.form = null; }
+function openForm(cfg) {
+  ui.form = cfg;
+  const field = f => {
+    const id = 'f-' + f.name, v = f.value ?? '';
+    let ctl;
+    if (f.type === 'select') ctl = '<select id="' + id + '" name="' + f.name + '">' + f.options.map(o => { const [val, lab] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(val) + '"' + (String(val) === String(v) ? ' selected' : '') + '>' + esc(lab) + '</option>'; }).join('') + '</select>';
+    else if (f.type === 'textarea') ctl = '<textarea id="' + id + '" name="' + f.name + '" rows="' + (f.rows || 3) + '">' + esc(v) + '</textarea>';
+    else if (f.type === 'checks') ctl = '<div class="checks" id="' + id + '">' + f.options.map(o => '<label><input type="checkbox" name="' + f.name + '" value="' + esc(o) + '"' + (v.includes(o) ? ' checked' : '') + '>' + esc(o) + '</label>').join('') + '</div>';
+    else ctl = '<input type="' + (f.type || 'text') + '" id="' + id + '" name="' + f.name + '" value="' + esc(v) + '"' + (f.step ? ' step="' + f.step + '"' : '') + (f.min !== undefined ? ' min="' + f.min + '"' : '') + (f.max !== undefined ? ' max="' + f.max + '"' : '') + '>';
+    return '<div class="field' + (f.wide ? ' wide' : '') + '"><label' + (f.type === 'checks' ? '' : ' for="' + id + '"') + '>' + esc(f.label) + (f.required ? ' *' : '') + '</label>' + ctl + (f.after || '') + '</div>';
+  };
+  openLayer('<div class="scrim" data-act="layer-close"></div><form class="modal glass" data-form="modal" novalidate role="dialog" aria-label="' + esc(cfg.title) + '">' +
+    '<div class="spread"><h2>' + esc(cfg.title) + '</h2><button type="button" class="icon-btn" data-act="layer-close" aria-label="Close">' + ic('x') + '</button></div>' +
+    '<div class="form-grid">' + cfg.fields.map(field).join('') + '</div><p class="err" id="form-err" role="alert" hidden></p>' +
+    '<footer><button type="button" class="btn" data-act="layer-close">Cancel</button><button class="btn primary">' + esc(cfg.cta) + '</button></footer></form>');
+}
+function armed(el) {
+  if (el.dataset.armed) return true;
+  el.dataset.armed = '1'; el.dataset.label = el.textContent; el.textContent = 'Confirm'; el.classList.add('danger');
+  setTimeout(() => { if (el.isConnected && el.dataset.armed) { delete el.dataset.armed; el.textContent = el.dataset.label; el.classList.remove('danger'); } }, 3200);
+  return false;
+}
+
+/* =========================================================
+   Resume upload: the server extracts the text (pypdf for PDFs)
+   ========================================================= */
+async function onResumeFile(input) {
+  const file = input.files && input.files[0], status = $('#resume-status'), area = $('#resume-text');
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { status.textContent = 'That file is larger than 5 MB. Choose a smaller one.'; return; }
+  status.textContent = 'Reading ' + file.name + '…';
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const r = await api('POST', '/api/me/resume/extract', form);
+    area.value = r.text; area.dataset.file = r.name;
+    status.textContent = 'Loaded ' + r.name + '. Review the text, then save.';
+  } catch (e) { status.textContent = e.message; }
+}
+
+/* =========================================================
+   Actions
+   ========================================================= */
+/* Re-read the server snapshot after a change, then redraw. */
+async function sync(message) {
+  await reload();
+  ui.simRes = null;
+  if (session && session.role === 'student' && ui.route === 'simulator' && ui.sim.add.length) await loadSim();
+  render();
+  if (message) toast(message);
+}
+function copyFrom(input) {
+  const done = () => toast('Copied.');
+  const manual = () => { input.focus(); input.select(); toast('Press Ctrl+C to copy the selected text.'); };
+  try { navigator.clipboard.writeText(input.value).then(done, manual); } catch (e) { manual(); }
+}
+
+const ACT = {
+  'auth-tab'(el) { ui.authTab = el.dataset.tab; ui.authErr = ''; render(); },
+  async demo(el) { await api('POST', '/api/login', {email: DEMO[el.dataset.role], pass: DEMO.pass}); await enter(); },
+  async signout() {
+    await api('POST', '/api/logout');
+    closeLayer(); ui.authTab = 'signin'; ui.authErr = ''; $('#toasts').innerHTML = '';
+    await reload();
+    try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* not available */ }
+    render(true); window.scrollTo(0, 0);
+  },
+  theme() {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark'; store.set(TKEY, root.dataset.theme);
+  },
+  async reset(el) {
+    if (!armed(el)) return;
+    await api('POST', '/api/reset');
+    ui.g = {}; ui.sim = {jobId: null, add: []}; ui.simRes = null; ui.resumeFound = null; ui.cand.jobId = null;
+    await reload(); render(true); toast('Sample data restored.');
+  },
+  menu() { ui.menu = !ui.menu; $('#rail').classList.toggle('open', ui.menu); $('.rail-scrim').hidden = !ui.menu; },
+  'layer-close'() { closeLayer(); },
+  'copy-text'(el) { const input = document.getElementById(el.dataset.target); if (input) copyFrom(input); },
+  'job-open'(el) { openJob(el.dataset.id); },
+  async 'job-apply'(el) {
+    const j = jobById(el.dataset.id); if (!j) return;
+    await api('POST', '/api/applications', {jobId: j.id});
+    const open = $('#layer').classList.contains('on');
+    await reload(); render(); if (open) openJob(j.id);
+    toast('Applied to ' + j.title + ' at ' + company(j.companyId).name + '.');
+  },
+  'job-sim'(el) { ui.sim = {jobId: el.dataset.id, add: []}; ui.simRes = null; closeLayer(); go('simulator'); },
+  async 'skill-del'(el) { await api('POST', '/api/me/skills/remove', {skill: el.dataset.skill}); await sync(); },
+  async 'item-del'(el) { await api('DELETE', '/api/me/items/' + el.dataset.kind + '/' + el.dataset.id); await sync('Removed.'); },
+  async 'resume-clear'() { await api('DELETE', '/api/me/resume'); ui.resumeFound = null; await sync('Resume removed.'); },
+  async 'resume-addall'() {
+    const fresh = (ui.resumeFound || []).filter(k => !me().skills.includes(k)); if (!fresh.length) return;
+    await api('POST', '/api/me/skills', {text: fresh.join(', ')});
+    await sync('Added ' + fresh.length + ' skill' + (fresh.length === 1 ? '' : 's') + ' from your resume.');
+  },
+  async 'road-sim'(el) {
+    const s = me(), k = el.dataset.skill, best = rankedJobs(s).filter(m => m.rows.some(r => r.skill === k && r.c < 1))[0];
+    ui.sim = {jobId: best ? best.job.id : null, add: [k]};
+    await loadSim(); go('simulator');
+  },
+  async 'road-learn'(el) { const k = el.dataset.skill; await api('POST', '/api/me/skills', {text: k}); await sync(k + ' added to your skills. Scores have been updated.'); },
+  async 'sim-toggle'(el) { const k = el.dataset.skill, a = ui.sim.add; ui.sim.add = a.includes(k) ? a.filter(x => x !== k) : [...a, k]; await loadSim(); render(); },
+  'sim-clear'() { ui.sim.add = []; ui.simRes = null; render(); },
+  async 'sim-commit'() {
+    const a = ui.sim.add.filter(k => !me().skills.includes(k)); if (!a.length) return;
+    await api('POST', '/api/me/skills', {text: a.join(', ')});
+    ui.sim.add = []; await sync('Added ' + a.join(', ') + ' to your profile.');
+  },
+  async 'app-withdraw'(el) { if (!armed(el)) return; await api('DELETE', '/api/applications/' + el.dataset.id); await sync('Application withdrawn.'); },
+  'stu-view'(el) { ui.search = ''; refresh('search-results'); const g = $('#global-search'); if (g) g.value = ''; openStudent(el.dataset.id); },
+  'stu-add'() { studentForm(null); },
+  'stu-edit'(el) { studentForm(studentById(el.dataset.id)); },
+  async 'stu-del'(el) { if (!armed(el)) return; await api('DELETE', '/api/students/' + el.dataset.id); await sync('Student removed.'); },
+  'co-add'() { companyForm(null); },
+  'co-edit'(el) { companyForm(db.companies.find(c => c.id === el.dataset.id)); },
+  async 'co-del'(el) {
+    if (!armed(el)) return;
+    const r = await api('DELETE', '/api/companies/' + el.dataset.id);
+    await sync('Company removed along with ' + r.jobsRemoved + ' posting' + (r.jobsRemoved === 1 ? '' : 's') + '.');
+  },
+  'co-goto'(el) { ui.search = ''; const id = el.dataset.id; if (ui.route === 'companies') render(); else go('companies'); setTimeout(() => { const c = document.getElementById('co-' + id); if (c) c.scrollIntoView({block: 'center', behavior: 'smooth'}); }, 80); },
+  'job-add'(el) { if (!db.companies.length) return toast('Add a company first.', true); jobForm(null, el.dataset.company); },
+  'job-edit'(el) { jobForm(jobById(el.dataset.id)); },
+  async 'job-del'(el) { if (!armed(el)) return; await api('DELETE', '/api/jobs/' + el.dataset.id); await sync('Posting removed.'); },
+  'job-cands'(el) { ui.search = ''; ui.cand.jobId = el.dataset.id; go('candidates'); },
+  async 'jd-extract'() {
+    const form = $('#layer form'), note = $('#jd-note');
+    const r = await api('POST', '/api/extract-skills', {text: form.elements.desc.value + ' ' + form.elements.title.value, listed: form.elements.must.value + ', ' + form.elements.nice.value});
+    if (!r.found.length) { note.textContent = 'No known skills found in the description.'; return; }
+    if (r.fresh.length) form.elements.must.value = [form.elements.must.value.trim().replace(/[,;\s]+$/, ''), ...r.fresh].filter(Boolean).join(', ');
+    note.textContent = r.fresh.length ? 'Added ' + r.fresh.length + ' skill' + (r.fresh.length === 1 ? '' : 's') + ' to must-have. Move optional ones to good-to-have.' : 'All detected skills are already listed.';
+  },
+  async 'cand-shortlist'(el) {
+    const s = studentById(el.dataset.id), j = jobById(ui.cand.jobId); if (!s || !j) return;
+    await api('POST', '/api/shortlist', {studentId: s.id, jobId: j.id});
+    await reload(); refresh('cand-table'); toast(s.name + ' shortlisted for ' + j.title + '.');
+  },
+  'cand-copy'() {
+    const j = jobById(ui.cand.jobId), q = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const csv = ['Rank,Name,Email,Department,CGPA,Match score,Eligible,Missing must-have skills', ...candRows().map((x, i) =>
+      [i + 1, q(x.s.name), q(x.s.email), q(x.s.dept), Number(x.s.cgpa).toFixed(2), x.m.score, x.m.elig.ok ? 'Yes' : 'No', q(x.m.rows.filter(r => r.must && r.how === 'missing').map(r => r.skill).join('; '))].join(','))].join('\n');
+    const fallback = () => { openLayer('<div class="scrim" data-act="layer-close"></div><div class="modal glass" role="dialog" aria-label="Shortlist CSV"><div class="spread"><h2>Shortlist for ' + esc(j.title) + '</h2><button class="icon-btn" data-act="layer-close" aria-label="Close">' + ic('x') + '</button></div><p class="muted">Select all the text below and copy it into a spreadsheet.</p><textarea id="csv-out" rows="12" readonly>' + esc(csv) + '</textarea></div>'); const t = $('#csv-out'); t.focus(); t.select(); };
+    try { navigator.clipboard.writeText(csv).then(() => toast('Shortlist copied. Paste it into a spreadsheet.'), fallback); } catch (e) { fallback(); }
+  }
+};
+
+const fields = (f, names) => Object.fromEntries(names.map(n => [n, f.elements[n].value]));
+const FORMS = {
+  async signin(f) {
+    try { await api('POST', '/api/login', fields(f, ['email', 'pass'])); await enter(); }
+    catch (e) { ui.authErr = e.message; render(); }
+  },
+  async signup(f) {
+    try {
+      await api('POST', '/api/register', fields(f, ['name', 'email', 'dept', 'cgpa', 'pass']));
+      await enter('profile');
+      toast('Account created. Add your skills to see your matches.');
+    } catch (e) {
+      const keep = fields(f, ['name', 'email', 'dept', 'cgpa']);
+      ui.authErr = e.message; render();
+      const again = $('form[data-form="signup"]'); if (again) Object.keys(keep).forEach(k => { again.elements[k].value = keep[k]; });
+    }
+  },
+  async profile(f) {
+    await api('PUT', '/api/me/profile', fields(f, ['name', 'phone', 'dept', 'gradYear', 'cgpa', 'backlogs', 'tenth', 'twelfth', 'headline']));
+    await sync('Details saved. Matches and eligibility have been recalculated.');
+  },
+  async skill(f) {
+    const typed = f.elements.skill.value.trim();
+    if (!typed) return toast('Type a skill to add.', true);
+    const r = await api('POST', '/api/me/skills', {text: typed});
+    if (!r.added.length) return toast('That skill is already in your profile.', true);
+    await sync(r.fixed.length ? 'Saved ' + r.fixed.join(', ') + '.' : 'Added ' + r.added.join(', ') + '.');
+    const i = $('#skill-input'); if (i) i.focus();
+  },
+  async project(f) { if (!f.elements.title.value.trim()) return toast('Give the project a title.', true); await api('POST', '/api/me/items/projects', fields(f, ['title', 'desc', 'tech'])); await sync('Project added.'); },
+  async cert(f) { if (!f.elements.name.value.trim()) return toast('Enter the certificate name.', true); await api('POST', '/api/me/items/certs', fields(f, ['name', 'issuer'])); await sync('Certification added.'); },
+  async exp(f) { if (!f.elements.role.value.trim()) return toast('Enter your role.', true); await api('POST', '/api/me/items/exp', fields(f, ['role', 'org', 'months', 'desc'])); await sync('Experience added.'); },
+  async resume(f) {
+    const s = me(), text = f.elements.text.value.trim();
+    if (text.length < 40) return toast('Paste or upload your resume text first (at least a few lines).', true);
+    const r = await api('POST', '/api/me/resume', {text, name: f.elements.text.dataset.file || (s.resume && s.resume.name) || 'Pasted text'});
+    ui.resumeFound = r.found;
+    await sync('Resume saved and analysed.');
+    const box = $('#resume-found'); if (box) box.scrollIntoView({block: 'center', behavior: 'smooth'});
+  },
+  async 'sim-custom'(f) {
+    const typed = f.elements.skill.value.trim();
+    if (!typed) return toast('Type a skill to try.', true);
+    const r = await api('POST', '/api/normalize', {text: typed}), s = me();
+    const fresh = r.skills.map(n => n.name).filter(k => !s.skills.includes(k));
+    if (!fresh.length) return toast('You already have that skill.', true);
+    fresh.forEach(k => { if (!ui.sim.add.includes(k)) ui.sim.add.push(k); });
+    await loadSim(); render();
+  },
+  async modal(f) {
+    const cfg = ui.form, v = {}, err = $('#form-err'); if (!cfg) return;
+    for (const fd of cfg.fields) {
+      v[fd.name] = fd.type === 'checks' ? $$('input[name="' + fd.name + '"]:checked', f).map(i => i.value) : f.elements[fd.name].value;
+      if (fd.required && !String(v[fd.name]).trim()) { err.textContent = fd.label + ' is required.'; err.hidden = false; f.elements[fd.name].focus(); return; }
+    }
+    let after;
+    try { after = await cfg.onSubmit(v); }
+    catch (e) { if (err.isConnected) { err.textContent = e.message; err.hidden = false; } return; }
+    closeLayer(); render();
+    if (typeof after === 'function') after();
+  }
+};
+const CHANGES = {
+  'jobs.type'(el) { ui.jobs.type = el.value; refresh('jobs-list'); },
+  'jobs.sort'(el) { ui.jobs.sort = el.value; refresh('jobs-list'); },
+  'jobs.elig'(el) { ui.jobs.elig = el.checked; refresh('jobs-list'); },
+  'sim.job'(el) { ui.sim = {jobId: el.value, add: []}; ui.simRes = null; delete ui.g['sim-before']; delete ui.g['sim-after']; render(); },
+  'stu.dept'(el) { ui.stu.dept = el.value; refresh('stu-table'); },
+  'cand.job'(el) { ui.cand.jobId = el.value; render(); },
+  'cand.elig'(el) { ui.cand.elig = el.checked; refresh('cand-table'); },
+  'pipe.status'(el) { ui.pipe.status = el.value; refresh('pipe-table'); },
+  async 'app.status'(el) {
+    const a = db.applications.find(x => x.id === el.dataset.id); if (!a) return;
+    const s = studentById(a.studentId), status = el.value;
+    await api('PUT', '/api/applications/' + a.id, {status});
+    await reload(); refresh('pipe-table'); toast((s ? s.name : 'Application') + ' moved to ' + status + '.');
+  },
+  'resume-file'(el) { return onResumeFile(el); }
+};
+const INPUTS = {
+  'jobs.q'(el) { ui.jobs.q = el.value; refresh('jobs-list'); },
+  'stu.q'(el) { ui.stu.q = el.value; refresh('stu-table'); },
+  search(el) { ui.search = el.value; refresh('search-results'); }
+};
+
+/* Run a handler, show any server error as a toast, and return to sign-in if the session has ended. */
+function run(handler, el, event) {
+  if (el.dataset.busy) return;
+  el.dataset.busy = '1';
+  (async () => handler(el, event))()
+    .catch(async err => {
+      toast(err.message || 'Something went wrong.', true);
+      if (err.status === 401 && session) { try { await reload(); } catch (e) { /* server unreachable */ } closeLayer(); render(true); }
+    })
+    .finally(() => { delete el.dataset.busy; });
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (el && !el.disabled && ACT[el.dataset.act]) { run(ACT[el.dataset.act], el, e); return; }
+  if (ui.search && !e.target.closest('.search')) { ui.search = ''; refresh('search-results'); const g = $('#global-search'); if (g) g.value = ''; }
+});
+document.addEventListener('submit', e => { const f = e.target.closest('form[data-form]'); if (!f) return; e.preventDefault(); const h = FORMS[f.dataset.form]; if (h) run(h, f, e); });
+document.addEventListener('change', e => { const el = e.target.closest('[data-change]'); if (el && CHANGES[el.dataset.change]) run(CHANGES[el.dataset.change], el, e); });
+document.addEventListener('input', e => { const el = e.target.closest('[data-input]'); if (el && INPUTS[el.dataset.input]) INPUTS[el.dataset.input](el); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#layer').classList.contains('on')) closeLayer(); else if (ui.menu) ACT.menu(); } });
+
+/* ---------- boot ---------- */
+const savedTheme = store.get(TKEY);
+if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
+(async () => {
+  try { await reload(); }
+  catch (e) {
+    $('#app').innerHTML = '<div class="auth"><section class="auth-copy"><a class="brand" href="/">' + LOGO + '<span>PlacePilot <em>AI</em></span></a><h1>The server is not responding.</h1><p>' + esc(e.message) + '</p></section></div>';
+    return;
+  }
+  ui.route = parseRoute();
+  render(true);
+})();
+})();
+</script>
+</body>
+</html>
